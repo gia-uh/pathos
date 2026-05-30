@@ -1,4 +1,5 @@
 from pathos.core.capabilities import Capability
+from pathos.core.result import SearchResult
 
 
 def test_capability_enum_members():
@@ -18,3 +19,25 @@ def test_capability_set_operations():
     required = {Capability.SUCCESSORS, Capability.GOAL}
     available = {Capability.SUCCESSORS, Capability.GOAL, Capability.HEURISTIC}
     assert required <= available
+
+
+def test_search_result_found():
+    r = SearchResult(
+        solution="goal",
+        path=[("move", "goal")],
+        cost=1.0,
+        algorithm="BFS",
+        nodes_expanded=5,
+        elapsed=0.01,
+        found=True,
+    )
+    assert r.found
+    assert r.solution == "goal"
+    assert r.algorithm == "BFS"
+
+
+def test_search_result_not_found():
+    r = SearchResult.not_found(algorithm="AStar", nodes_expanded=100, elapsed=0.5)
+    assert not r.found
+    assert r.solution is None
+    assert r.cost is None
