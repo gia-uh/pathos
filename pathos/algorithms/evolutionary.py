@@ -136,28 +136,32 @@ class DifferentialEvolution(Algorithm):
     def solve(self) -> SearchResult:
         t0 = time.perf_counter()
         pop = [self.space._initial for _ in range(self.pop_size)]
-        costs = [self.space._evaluate(x) for x in pop]
+        costs = batch_map(self.space._evaluate, pop, self._n_workers)
         best_idx = min(range(self.pop_size), key=lambda i: costs[i])
         best, best_cost = pop[best_idx], costs[best_idx]
 
         for _ in range(self.generations):
+            trials = []
             for i in range(self.pop_size):
-                a, b, c = random.sample([j for j in range(self.pop_size) if j != i], 3)
-                x, xa, xb, xc = pop[i], pop[a], pop[b], pop[c]
+                x = pop[i]
                 if not isinstance(x, list):
-                    continue  # DE requires list/vector state
+                    trials.append(x)
+                    continue
+                a, b, c = random.sample([j for j in range(self.pop_size) if j != i], 3)
+                xa, xb, xc = pop[a], pop[b], pop[c]
                 dim = len(x)
                 j_rand = random.randint(0, dim - 1)
-                trial = [
+                trials.append([
                     xa[j] + self.F * (xb[j] - xc[j])
                     if random.random() < self.CR or j == j_rand else x[j]
                     for j in range(dim)
-                ]
-                trial_cost = self.space._evaluate(trial)
-                if trial_cost < costs[i]:
-                    pop[i], costs[i] = trial, trial_cost
-                    if trial_cost < best_cost:
-                        best, best_cost = trial, trial_cost
+                ])
+            trial_costs = batch_map(self.space._evaluate, trials, self._n_workers)
+            for i in range(self.pop_size):
+                if trial_costs[i] < costs[i]:
+                    pop[i], costs[i] = trials[i], trial_costs[i]
+                    if trial_costs[i] < best_cost:
+                        best, best_cost = trials[i], trial_costs[i]
 
         return SearchResult(best, None, best_cost, "DifferentialEvolution",
                             self.generations * self.pop_size, time.perf_counter() - t0, True)
