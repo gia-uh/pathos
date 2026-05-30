@@ -41,3 +41,55 @@ def test_search_result_not_found():
     assert not r.found
     assert r.solution is None
     assert r.cost is None
+
+
+from pathos.core.space import Space
+
+
+def test_space_successors_decorator():
+    space = Space().initial("a")
+
+    @space.successors
+    def expand(state):
+        yield "go_b", "b"
+
+    assert Capability.SUCCESSORS in space.capabilities
+    results = list(space._successors("a"))
+    assert results == [("go_b", "b")]
+
+def test_space_goal_decorator():
+    space = Space().initial("a")
+
+    @space.goal
+    def is_goal(state):
+        return state == "b"
+
+    assert Capability.GOAL in space.capabilities
+    assert space._goal("b")
+    assert not space._goal("a")
+
+def test_space_heuristic_decorator():
+    space = Space().initial("a")
+
+    @space.heuristic
+    def h(state):
+        return 0.0
+
+    assert Capability.HEURISTIC in space.capabilities
+
+def test_space_evaluate_decorator():
+    space = Space().initial("a")
+
+    @space.evaluate
+    def cost(state):
+        return 1.0
+
+    assert Capability.EVALUATE in space.capabilities
+
+def test_space_initial_value():
+    space = Space().initial("start")
+    assert space._initial == "start"
+
+def test_space_initial_callable():
+    space = Space().initial(lambda: "start")
+    assert space._initial == "start"
