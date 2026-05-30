@@ -70,6 +70,23 @@ tour = TourSpace(nodes=cities, distances=dist_matrix)
 game = GameSpace().initial(board)
 ```
 
+## Parallel Evaluation
+
+Population-based algorithms (GA, DE, LocalBeamSearch) support multiprocessing via `.parallel(n)`:
+
+```python
+# Evaluate all candidates in parallel across 4 processes
+space = Space().initial(lambda: random_genome()).parallel(4)
+
+# evaluate fn must be a module-level function (picklable)
+def fitness(genome): return -sum(genome)
+space.evaluate(fitness)
+
+result = GeneticAlgorithm(space, pop_size=200, generations=500).solve()
+```
+
+Pass `n=1` (default) for serial execution. Falls back automatically when population size is 1.
+
 ## Direct Algorithm Access
 
 ```python

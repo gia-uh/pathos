@@ -98,6 +98,32 @@ def score(board, player): ...
 result = space.solver().solve()  # → uses Alpha-Beta
 ```
 
+## Parallel Evaluation
+
+Population-based algorithms (GA, DE, LocalBeamSearch) can evaluate candidates in parallel using Python's `multiprocessing` module. Call `.parallel(n)` on the Space to enable it:
+
+```python
+from pathos import Space
+from pathos.algorithms import GeneticAlgorithm
+
+# Module-level function — required for multiprocessing (must be picklable)
+def fitness(genome):
+    return -sum(genome)
+
+space = (
+    Space()
+    .initial(lambda: [random.randint(0, 1) for _ in range(100)])
+    .parallel(4)  # use 4 worker processes
+)
+space.evaluate(fitness)
+
+result = GeneticAlgorithm(space, pop_size=200, generations=500).solve()
+```
+
+**Pickling constraint:** The evaluate (and successors) functions must be defined at module level, not as lambdas or inner functions, because worker processes receive them via `pickle`. This is a standard Python multiprocessing limitation.
+
+The default is `.parallel(1)` — fully serial, no overhead.
+
 ## Capability → Algorithm Reference
 
 | Capabilities | Best Algorithm |
