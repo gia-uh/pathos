@@ -17,3 +17,6 @@ venv/
 # Dev
 .env
 
+# Worktrees
+.worktrees/
+
