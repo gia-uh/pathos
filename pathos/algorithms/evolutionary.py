@@ -8,6 +8,7 @@ from pathos.algorithms.base import Algorithm
 from pathos.core.capabilities import Capability
 from pathos.core.result import SearchResult
 from pathos.core.solver import register
+from pathos.core.parallel import batch_map
 
 
 @register
@@ -84,12 +85,14 @@ class GeneticAlgorithm(Algorithm):
     def solve(self) -> SearchResult:
         t0 = time.perf_counter()
         population = [self.space._initial for _ in range(self.pop_size)]
-        best = min(population, key=self.space._evaluate)
-        best_cost = self.space._evaluate(best)
+        costs = batch_map(self.space._evaluate, population, self._n_workers)
+        best_idx = min(range(len(population)), key=lambda i: costs[i])
+        best, best_cost = population[best_idx], costs[best_idx]
 
         for _ in range(self.generations):
-            scored = sorted(population, key=self.space._evaluate)
-            population = scored[: self.pop_size // 2]  # elitism
+            costs = batch_map(self.space._evaluate, population, self._n_workers)
+            pairs = sorted(zip(costs, population))
+            population = [x for _, x in pairs[: self.pop_size // 2]]
             while len(population) < self.pop_size:
                 p1, p2 = random.sample(population, 2)
                 if self.crossover_fn:
@@ -99,10 +102,10 @@ class GeneticAlgorithm(Algorithm):
                 if self.mutate_fn and random.random() < self.mutation_rate:
                     child = self.mutate_fn(child)
                 population.append(child)
-            current_best = min(population, key=self.space._evaluate)
-            current_cost = self.space._evaluate(current_best)
-            if current_cost < best_cost:
-                best, best_cost = current_best, current_cost
+            gen_costs = batch_map(self.space._evaluate, population, self._n_workers)
+            gen_best_idx = min(range(len(population)), key=lambda i: gen_costs[i])
+            if gen_costs[gen_best_idx] < best_cost:
+                best, best_cost = population[gen_best_idx], gen_costs[gen_best_idx]
 
         return SearchResult(best, None, best_cost, "GeneticAlgorithm",
                             self.generations * self.pop_size, time.perf_counter() - t0, True)
