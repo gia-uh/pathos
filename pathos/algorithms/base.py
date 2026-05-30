@@ -20,6 +20,7 @@ class Algorithm(ABC):
                 f"{', '.join(c.name for c in missing)}"
             )
         self.space = space
+        self._n_workers: int = space._n_workers
 
     @abstractmethod
     def solve(self) -> SearchResult:
