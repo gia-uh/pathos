@@ -10,7 +10,17 @@ from pathos.core.solver import register
 
 @register
 class Backtracking(Algorithm):
-    """Backtracking search. Uses the space's successors as CSP expansion."""
+    """Backtracking search — systematic recursive CSP solver.
+
+    Uses the space's successors as CSP expansion (typically via CSPSpace).
+
+    Requires: successors, goal.
+
+    Attributes:
+        requires: Capability set needed.
+        power_rank: 9.
+    """
+
     requires = frozenset({Capability.SUCCESSORS, Capability.GOAL})
     power_rank = 9
 
@@ -36,7 +46,17 @@ class Backtracking(Algorithm):
 
 @register
 class ForwardChecking(Algorithm):
-    """Forward Checking — like Backtracking but prunes via look-ahead."""
+    """Forward Checking — Backtracking with look-ahead pruning.
+
+    Before recursing, checks that each child has at least one valid successor.
+
+    Requires: successors, goal.
+
+    Attributes:
+        requires: Capability set needed.
+        power_rank: 11.
+    """
+
     requires = frozenset({Capability.SUCCESSORS, Capability.GOAL})
     power_rank = 11
 
@@ -101,6 +121,17 @@ class AC3(Algorithm):
 
 @register
 class MinConflicts(Algorithm):
+    """Min-Conflicts heuristic — local repair CSP solver.
+
+    Repeatedly selects the neighbor that minimizes constraint violations.
+
+    Requires: successors, goal, evaluate.
+
+    Attributes:
+        requires: Capability set needed.
+        power_rank: 19.
+    """
+
     requires = frozenset({Capability.SUCCESSORS, Capability.GOAL, Capability.EVALUATE})
     power_rank = 19
 

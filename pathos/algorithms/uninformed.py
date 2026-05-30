@@ -10,6 +10,15 @@ from pathos.core.solver import register
 
 @register
 class BFS(Algorithm):
+    """Breadth-First Search — complete, optimal for unit-cost graphs.
+
+    Requires: successors, goal.
+
+    Attributes:
+        requires: Capability set needed.
+        power_rank: 10.
+    """
+
     requires = frozenset({Capability.SUCCESSORS, Capability.GOAL})
     power_rank = 10
 
@@ -43,6 +52,15 @@ class BFS(Algorithm):
 
 @register
 class DFS(Algorithm):
+    """Depth-First Search — memory-efficient but incomplete on infinite graphs.
+
+    Requires: successors, goal.
+
+    Attributes:
+        requires: Capability set needed.
+        power_rank: 5.
+    """
+
     requires = frozenset({Capability.SUCCESSORS, Capability.GOAL})
     power_rank = 5
 
@@ -73,6 +91,15 @@ class DFS(Algorithm):
 
 @register
 class IDDFS(Algorithm):
+    """Iterative Deepening DFS — optimal memory with BFS-like completeness.
+
+    Requires: successors, goal.
+
+    Attributes:
+        requires: Capability set needed.
+        power_rank: 8.
+    """
+
     requires = frozenset({Capability.SUCCESSORS, Capability.GOAL})
     power_rank = 8
 
@@ -108,7 +135,15 @@ class IDDFS(Algorithm):
 
 @register
 class UCS(Algorithm):
-    """Uniform-Cost Search (Dijkstra). Requires evaluate for edge costs."""
+    """Uniform-Cost Search (Dijkstra) — optimal for weighted graphs.
+
+    Requires: successors, goal, evaluate.
+
+    Attributes:
+        requires: Capability set needed.
+        power_rank: 12.
+    """
+
     requires = frozenset({Capability.SUCCESSORS, Capability.GOAL, Capability.EVALUATE})
     power_rank = 12
 

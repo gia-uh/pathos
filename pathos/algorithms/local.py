@@ -10,6 +10,15 @@ from pathos.core.solver import register
 
 @register
 class HillClimbing(Algorithm):
+    """Hill Climbing local search — greedily improves state via neighbors.
+
+    Requires: successors, evaluate.
+
+    Attributes:
+        requires: Capability set needed.
+        power_rank: 15.
+    """
+
     requires = frozenset({Capability.SUCCESSORS, Capability.EVALUATE})
     power_rank = 15
 
@@ -54,6 +63,15 @@ class HillClimbing(Algorithm):
 
 @register
 class TabuSearch(Algorithm):
+    """Tabu Search — escapes local optima via short-term memory of visited states.
+
+    Requires: successors, evaluate.
+
+    Attributes:
+        requires: Capability set needed.
+        power_rank: 18.
+    """
+
     requires = frozenset({Capability.SUCCESSORS, Capability.EVALUATE})
     power_rank = 18
 
@@ -94,6 +112,15 @@ class TabuSearch(Algorithm):
 
 @register
 class LocalBeamSearch(Algorithm):
+    """Local Beam Search — maintains k parallel states and expands best neighbors.
+
+    Requires: successors, evaluate.
+
+    Attributes:
+        requires: Capability set needed.
+        power_rank: 16.
+    """
+
     requires = frozenset({Capability.SUCCESSORS, Capability.EVALUATE})
     power_rank = 16
 

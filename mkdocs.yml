@@ -1,0 +1,41 @@
+site_name: PATHOS
+site_description: Production-ready classical AI search algorithms
+site_url: https://gia-uh.github.io/pathos
+repo_url: https://github.com/gia-uh/pathos
+repo_name: gia-uh/pathos
+
+theme:
+  name: material
+  palette:
+    primary: deep purple
+    accent: amber
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - content.code.copy
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            show_source: true
+            docstring_style: google
+
+nav:
+  - Home: index.md
+  - Getting Started: getting-started.md
+  - API Reference:
+      - Space: api/space.md
+      - Algorithms: api/algorithms.md
+      - Spaces: api/spaces.md
+      - SearchResult: api/result.md
+
+exclude_docs: |
+  superpowers/
+
+markdown_extensions:
+  - pymdownx.highlight
+  - pymdownx.superfences
+  - admonition

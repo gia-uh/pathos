@@ -11,6 +11,17 @@ from pathos.core.solver import register
 
 @register
 class AStar(Algorithm):
+    """A* search — optimal pathfinding with admissible heuristic.
+
+    Requires: successors, goal, heuristic, evaluate.
+    Selects the path minimizing g(n) + h(n) where g is actual cost
+    and h is an admissible heuristic estimate to goal.
+
+    Attributes:
+        requires: Capability set needed.
+        power_rank: 30 (preferred over BFS/DFS/Greedy when available).
+    """
+
     requires = frozenset({Capability.SUCCESSORS, Capability.GOAL,
                           Capability.HEURISTIC, Capability.EVALUATE})
     power_rank = 30
@@ -46,6 +57,15 @@ class AStar(Algorithm):
 
 @register
 class GreedyBestFirst(Algorithm):
+    """Greedy Best-First search — fast but not optimal; follows heuristic greedily.
+
+    Requires: successors, goal, heuristic.
+
+    Attributes:
+        requires: Capability set needed.
+        power_rank: 20.
+    """
+
     requires = frozenset({Capability.SUCCESSORS, Capability.GOAL, Capability.HEURISTIC})
     power_rank = 20
 
@@ -80,6 +100,15 @@ class GreedyBestFirst(Algorithm):
 
 @register
 class WeightedAStar(Algorithm):
+    """Weighted A* — trades optimality for speed via inflated heuristic.
+
+    Requires: successors, goal, heuristic, evaluate.
+
+    Attributes:
+        requires: Capability set needed.
+        power_rank: 28.
+    """
+
     requires = frozenset({Capability.SUCCESSORS, Capability.GOAL,
                           Capability.HEURISTIC, Capability.EVALUATE})
     power_rank = 28
@@ -119,6 +148,15 @@ class WeightedAStar(Algorithm):
 
 @register
 class IDAstar(Algorithm):
+    """IDA* — iterative deepening A*, memory-efficient optimal search.
+
+    Requires: successors, goal, heuristic, evaluate.
+
+    Attributes:
+        requires: Capability set needed.
+        power_rank: 25.
+    """
+
     requires = frozenset({Capability.SUCCESSORS, Capability.GOAL,
                           Capability.HEURISTIC, Capability.EVALUATE})
     power_rank = 25
@@ -164,6 +202,15 @@ class IDAstar(Algorithm):
 
 @register
 class BidirectionalAStar(Algorithm):
+    """Bidirectional A* — searches from both ends to meet in the middle.
+
+    Requires: successors, goal, heuristic, evaluate, reverse_successors.
+
+    Attributes:
+        requires: Capability set needed.
+        power_rank: 35.
+    """
+
     requires = frozenset({Capability.SUCCESSORS, Capability.GOAL,
                           Capability.HEURISTIC, Capability.EVALUATE,
                           Capability.REVERSE_SUCCESSORS})

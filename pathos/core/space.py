@@ -4,6 +4,20 @@ from pathos.core.capabilities import Capability
 
 
 class Space:
+    """Problem definition container for PATHOS search algorithms.
+
+    Declare *what your problem can do* using decorator hooks.
+    The auto-solver selects the most powerful compatible algorithm.
+
+    Example:
+        >>> space = Space().initial("A")
+        >>> @space.successors
+        ... def expand(state): yield "go_B", "B"
+        >>> @space.goal
+        ... def is_goal(state): return state == "B"
+        >>> result = space.solver().solve()
+    """
+
     def __init__(self) -> None:
         self.capabilities: set[Capability] = set()
         self._initial_value: Any = None

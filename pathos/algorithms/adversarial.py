@@ -11,6 +11,15 @@ from pathos.core.solver import register
 
 @register
 class Minimax(Algorithm):
+    """Minimax search for two-player zero-sum games.
+
+    Requires: successors, terminal, utility.
+
+    Attributes:
+        requires: Capability set needed.
+        power_rank: 40.
+    """
+
     requires = frozenset({Capability.SUCCESSORS, Capability.TERMINAL, Capability.UTILITY})
     power_rank = 40
 
@@ -48,6 +57,15 @@ class Minimax(Algorithm):
 
 @register
 class AlphaBeta(Algorithm):
+    """Alpha-Beta pruning — Minimax with branch pruning for efficiency.
+
+    Requires: successors, terminal, utility.
+
+    Attributes:
+        requires: Capability set needed.
+        power_rank: 45 (preferred over Minimax when available).
+    """
+
     requires = frozenset({Capability.SUCCESSORS, Capability.TERMINAL, Capability.UTILITY})
     power_rank = 45
 
@@ -90,6 +108,15 @@ class AlphaBeta(Algorithm):
 
 @register
 class Negamax(Algorithm):
+    """Negamax — Minimax variant using score negation for multi-player support.
+
+    Requires: successors, terminal, utility.
+
+    Attributes:
+        requires: Capability set needed.
+        power_rank: 42.
+    """
+
     requires = frozenset({Capability.SUCCESSORS, Capability.TERMINAL, Capability.UTILITY})
     power_rank = 42
 
@@ -150,6 +177,15 @@ class _MCTSNode:
 
 @register
 class MCTS(Algorithm):
+    """Monte Carlo Tree Search — simulation-based game tree exploration.
+
+    Requires: successors, terminal, utility.
+
+    Attributes:
+        requires: Capability set needed.
+        power_rank: 43.
+    """
+
     requires = frozenset({Capability.SUCCESSORS, Capability.TERMINAL, Capability.UTILITY})
     power_rank = 43
 

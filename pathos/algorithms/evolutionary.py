@@ -12,6 +12,15 @@ from pathos.core.solver import register
 
 @register
 class SimulatedAnnealing(Algorithm):
+    """Simulated Annealing — probabilistic local search with cooling schedule.
+
+    Requires: successors, evaluate.
+
+    Attributes:
+        requires: Capability set needed.
+        power_rank: 17.
+    """
+
     requires = frozenset({Capability.SUCCESSORS, Capability.EVALUATE})
     power_rank = 17
 
@@ -48,6 +57,16 @@ class SimulatedAnnealing(Algorithm):
 
 @register
 class GeneticAlgorithm(Algorithm):
+    """Genetic Algorithm — population-based evolutionary optimization.
+
+    Requires: evaluate.
+    Caller must supply crossover_fn and mutate_fn for non-trivial state types.
+
+    Attributes:
+        requires: Capability set needed.
+        power_rank: 14.
+    """
+
     requires = frozenset({Capability.EVALUATE})
     power_rank = 14
 
@@ -91,6 +110,15 @@ class GeneticAlgorithm(Algorithm):
 
 @register
 class DifferentialEvolution(Algorithm):
+    """Differential Evolution — vector-based evolutionary optimization for continuous spaces.
+
+    Requires: evaluate. State must be a list/vector.
+
+    Attributes:
+        requires: Capability set needed.
+        power_rank: 13.
+    """
+
     requires = frozenset({Capability.EVALUATE})
     power_rank = 13
 
