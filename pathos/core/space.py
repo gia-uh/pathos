@@ -62,6 +62,7 @@ class Space:
         return self
 
     def parallel(self, workers: int) -> Space:
+        # evaluate/successors functions must be picklable (module-level) when workers > 1
         self._n_workers = workers
         return self
 
