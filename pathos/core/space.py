@@ -1,6 +1,9 @@
 from __future__ import annotations
-from typing import Any, Callable, Iterable
+from typing import TYPE_CHECKING, Any, Callable
 from pathos.core.capabilities import Capability
+
+if TYPE_CHECKING:
+    from pathos.core.solver import Solver
 
 
 class Space:
@@ -28,13 +31,15 @@ class Space:
         self._players: int = 2
         self._maximizing_player: int = 0
 
-        self._successors: Callable | None = None
-        self._goal: Callable | None = None
-        self._heuristic: Callable | None = None
-        self._evaluate: Callable | None = None
-        self._terminal: Callable | None = None
-        self._utility: Callable | None = None
-        self._reverse_successors: Callable | None = None
+        # These are set via decorator hooks before any algorithm uses them;
+        # typed as Any to avoid false-positive "None not callable" mypy errors.
+        self._successors: Any = None
+        self._goal: Any = None
+        self._heuristic: Any = None
+        self._evaluate: Any = None
+        self._terminal: Any = None
+        self._utility: Any = None
+        self._reverse_successors: Any = None
 
     # --- fluent builder ---
 
@@ -68,46 +73,46 @@ class Space:
 
     # --- decorator hooks ---
 
-    def _make_hook(self, attr: str, cap: Capability) -> Callable:
-        def decorator(fn: Callable) -> Callable:
+    def _make_hook(self, attr: str, cap: Capability) -> Callable[..., Any]:
+        def decorator(fn: Callable[..., Any]) -> Callable[..., Any]:
             setattr(self, attr, fn)
             self.capabilities.add(cap)
             return fn
         return decorator
 
     @property
-    def successors(self) -> Callable:
+    def successors(self) -> Callable[..., Any]:
         return self._make_hook("_successors", Capability.SUCCESSORS)
 
     @property
-    def goal(self) -> Callable:
+    def goal(self) -> Callable[..., Any]:
         return self._make_hook("_goal", Capability.GOAL)
 
     @property
-    def heuristic(self) -> Callable:
+    def heuristic(self) -> Callable[..., Any]:
         return self._make_hook("_heuristic", Capability.HEURISTIC)
 
     @property
-    def evaluate(self) -> Callable:
+    def evaluate(self) -> Callable[..., Any]:
         return self._make_hook("_evaluate", Capability.EVALUATE)
 
     @property
-    def terminal(self) -> Callable:
+    def terminal(self) -> Callable[..., Any]:
         return self._make_hook("_terminal", Capability.TERMINAL)
 
     @property
-    def utility(self) -> Callable:
+    def utility(self) -> Callable[..., Any]:
         return self._make_hook("_utility", Capability.UTILITY)
 
     @property
-    def reverse_successors(self) -> Callable:
+    def reverse_successors(self) -> Callable[..., Any]:
         return self._make_hook("_reverse_successors", Capability.REVERSE_SUCCESSORS)
 
     # --- solver factory ---
 
     def solver(
         self,
-        candidates: list | None = None,
+        candidates: list[Any] | None = None,
         timeout: float | None = None,
     ) -> "Solver":
         from pathos.core.solver import Solver

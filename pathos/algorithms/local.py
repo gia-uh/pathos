@@ -85,7 +85,7 @@ class TabuSearch(Algorithm):
         current = self.space._initial
         best = current
         best_cost = self.space._evaluate(current)
-        tabu: list = [current]
+        tabu: list[Any] = [current]
         expanded = 0
 
         for _ in range(self.max_iter):

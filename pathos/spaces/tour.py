@@ -12,7 +12,7 @@ class TourSpace(Space):
     User provides @evaluate for tour cost.
     """
 
-    def __init__(self, nodes: list[Any], distances: dict | None = None) -> None:
+    def __init__(self, nodes: list[Any], distances: dict[Any, Any] | None = None) -> None:
         super().__init__()
         self._nodes = nodes
         self._distances = distances
@@ -21,7 +21,7 @@ class TourSpace(Space):
         self._setup_successors()
 
     def _setup_successors(self) -> None:
-        def _two_opt(tour):
+        def _two_opt(tour: list[Any]) -> Any:
             n = len(tour)
             for i in range(n - 1):
                 for j in range(i + 2, n):

@@ -30,7 +30,7 @@ class AStar(Algorithm):
         t0 = time.perf_counter()
         initial = self.space._initial
         h0 = self.space._heuristic(initial)
-        frontier: list = [(h0, 0, 0.0, initial, [])]
+        frontier: list[Any] = [(h0, 0, 0.0, initial, [])]
         g_score: dict[Any, float] = {initial: 0.0}
         counter = 1
         expanded = 0
@@ -72,8 +72,8 @@ class GreedyBestFirst(Algorithm):
     def solve(self) -> SearchResult:
         t0 = time.perf_counter()
         initial = self.space._initial
-        frontier: list = [(self.space._heuristic(initial), 0, initial, [])]
-        visited: set = set()
+        frontier: list[Any] = [(self.space._heuristic(initial), 0, initial, [])]
+        visited: set[Any] = set()
         counter = 1
         expanded = 0
 
@@ -121,7 +121,7 @@ class WeightedAStar(Algorithm):
         t0 = time.perf_counter()
         initial = self.space._initial
         h0 = self.space._heuristic(initial)
-        frontier: list = [(h0 * self.weight, 0, 0.0, initial, [])]
+        frontier: list[Any] = [(h0 * self.weight, 0, 0.0, initial, [])]
         g_score: dict[Any, float] = {initial: 0.0}
         counter = 1
         expanded = 0
@@ -161,7 +161,7 @@ class IDAstar(Algorithm):
                           Capability.HEURISTIC, Capability.EVALUATE})
     power_rank = 25
 
-    def _search(self, path: list, g: float, bound: float) -> tuple[float | str, list | None]:
+    def _search(self, path: list[Any], g: float, bound: float) -> tuple[float | str, list[Any] | None]:
         state = path[-1]
         f = g + self.space._heuristic(state)
         if f > bound:
@@ -196,7 +196,7 @@ class IDAstar(Algorithm):
                 )
             if result == math.inf:
                 return SearchResult.not_found("IDAstar", expanded, time.perf_counter() - t0)
-            bound = result  # type: ignore
+            bound = float(result)  # result is float here (str "FOUND" branch returned above)
             expanded += 1
 
 
@@ -230,8 +230,8 @@ class BidirectionalAStar(Algorithm):
         bwd_dist: dict[Any, float] = {goal: 0.0}
         fwd_prev: dict[Any, Any] = {}
         bwd_prev: dict[Any, Any] = {}
-        fwd_open: list = [(self.space._heuristic(initial), 0, initial)]
-        bwd_open: list = [(self.space._heuristic(goal), 1, goal)]
+        fwd_open: list[Any] = [(self.space._heuristic(initial), 0, initial)]
+        bwd_open: list[Any] = [(self.space._heuristic(goal), 1, goal)]
         counter = 2
         mu = math.inf
         expanded = 0

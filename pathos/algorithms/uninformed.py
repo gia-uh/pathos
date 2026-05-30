@@ -28,8 +28,8 @@ class BFS(Algorithm):
         if self.space._goal(initial):
             return SearchResult(initial, [], 0.0, "BFS", 0, 0.0, True)
 
-        frontier: deque[tuple[Any, list]] = deque([(initial, [])])
-        visited: set = {initial}
+        frontier: deque[tuple[Any, list[Any]]] = deque([(initial, [])])
+        visited: set[Any] = {initial}
         expanded = 0
 
         while frontier:
@@ -67,8 +67,8 @@ class DFS(Algorithm):
     def solve(self) -> SearchResult:
         t0 = time.perf_counter()
         initial = self.space._initial
-        stack: list[tuple[Any, list]] = [(initial, [])]
-        visited: set = set()
+        stack: list[tuple[Any, list[Any]]] = [(initial, [])]
+        visited: set[Any] = set()
         expanded = 0
 
         while stack:
@@ -103,7 +103,7 @@ class IDDFS(Algorithm):
     requires = frozenset({Capability.SUCCESSORS, Capability.GOAL})
     power_rank = 8
 
-    def _dls(self, state: Any, path: list, depth: int, visited: set) -> tuple[Any, list] | None:
+    def _dls(self, state: Any, path: list[Any], depth: int, visited: set[Any]) -> tuple[Any, list[Any]] | None:
         if self.space._goal(state):
             return state, path
         if depth == 0:
@@ -151,7 +151,7 @@ class UCS(Algorithm):
         import heapq
         t0 = time.perf_counter()
         initial = self.space._initial
-        frontier: list = [(0.0, 0, initial, [])]
+        frontier: list[Any] = [(0.0, 0, initial, [])]
         visited: dict[Any, float] = {}
         counter = 1
         expanded = 0

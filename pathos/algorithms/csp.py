@@ -1,7 +1,7 @@
 from __future__ import annotations
 import time
 import random
-from typing import Any
+from typing import Any, cast
 from pathos.algorithms.base import Algorithm
 from pathos.core.capabilities import Capability
 from pathos.core.result import SearchResult
@@ -24,7 +24,7 @@ class Backtracking(Algorithm):
     requires = frozenset({Capability.SUCCESSORS, Capability.GOAL})
     power_rank = 9
 
-    def _bt(self, state: Any, expanded: list) -> Any | None:
+    def _bt(self, state: Any, expanded: list[int]) -> Any | None:
         if self.space._goal(state):
             return state
         for _, child in self.space._successors(state):
@@ -60,7 +60,7 @@ class ForwardChecking(Algorithm):
     requires = frozenset({Capability.SUCCESSORS, Capability.GOAL})
     power_rank = 11
 
-    def _fc(self, state: Any, expanded: list) -> Any | None:
+    def _fc(self, state: Any, expanded: list[int]) -> Any | None:
         if self.space._goal(state):
             return state
         children = list(self.space._successors(state))
@@ -92,16 +92,18 @@ class AC3(Algorithm):
     power_rank = 22
 
     def solve(self) -> SearchResult:
+        from pathos.spaces.csp import CSPSpace
         t0 = time.perf_counter()
         # This is invoked by CSPSpace which sets up the variables/domains/constraints
-        variables = self.space._variables()
-        domains = {v: list(self.space._domain(v)) for v in variables}
+        csp = cast(CSPSpace, self.space)
+        variables = csp._variables()
+        domains: dict[Any, list[Any]] = {v: list(csp._domain(v)) for v in variables}
         arcs = [(xi, xj) for xi in variables for xj in variables if xi != xj]
         queue = list(arcs)
 
         while queue:
             xi, xj = queue.pop(0)
-            if self._revise(domains, xi, xj):
+            if self._revise(domains, xi, xj, csp):
                 if not domains[xi]:
                     return SearchResult.not_found("AC3", 0, time.perf_counter() - t0)
                 for xk in variables:
@@ -110,10 +112,10 @@ class AC3(Algorithm):
 
         return SearchResult(domains, None, None, "AC3", 0, time.perf_counter() - t0, True)
 
-    def _revise(self, domains: dict, xi: Any, xj: Any) -> bool:
+    def _revise(self, domains: dict[Any, list[Any]], xi: Any, xj: Any, csp: Any) -> bool:
         revised = False
         for x in domains[xi][:]:
-            if not any(self.space._constraints({xi: x, xj: y}) for y in domains[xj]):
+            if not any(csp._constraints({xi: x, xj: y}) for y in domains[xj]):
                 domains[xi].remove(x)
                 revised = True
         return revised

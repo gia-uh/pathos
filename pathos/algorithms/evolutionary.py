@@ -71,8 +71,8 @@ class GeneticAlgorithm(Algorithm):
     power_rank = 14
 
     def __init__(self, space: Any, pop_size: int = 50, generations: int = 100,
-                 crossover_fn: Callable | None = None,
-                 mutate_fn: Callable | None = None,
+                 crossover_fn: Callable[..., Any] | None = None,
+                 mutate_fn: Callable[..., Any] | None = None,
                  mutation_rate: float = 0.1) -> None:
         super().__init__(space)
         self.pop_size = pop_size

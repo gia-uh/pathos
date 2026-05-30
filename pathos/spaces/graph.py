@@ -23,7 +23,7 @@ class GraphSpace(Space):
         graph = self._graph
         pending = self._pending_edge_cost
 
-        def _successors(state: Any):
+        def _successors(state: Any) -> Any:
             for neighbor, cost in graph.get(state, []):
                 pending[neighbor] = cost
                 yield neighbor, neighbor

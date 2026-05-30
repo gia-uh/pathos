@@ -230,7 +230,8 @@ class MCTS(Algorithm):
                 break
             _, state = random.choice(moves)
             depth += 1
-        return self.space._utility(state, self.space._maximizing_player)
+        result: float = self.space._utility(state, self.space._maximizing_player)
+        return result
 
     def _backprop(self, node: _MCTSNode | None, reward: float) -> None:
         while node is not None:
