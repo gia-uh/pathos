@@ -6,6 +6,7 @@ from pathos.algorithms.base import Algorithm
 from pathos.core.capabilities import Capability
 from pathos.core.result import SearchResult
 from pathos.core.solver import register
+from pathos.core.parallel import batch_map
 
 
 @register
@@ -145,11 +146,11 @@ class LocalBeamSearch(Algorithm):
                 expanded += 1
             if not candidates:
                 break
-            candidates.sort(key=lambda s: self.space._evaluate(s))
-            beam = candidates[: self.k]
-            cost = self.space._evaluate(beam[0])
-            if cost < best_cost:
-                best_cost, best = cost, beam[0]
+            candidate_costs = batch_map(self.space._evaluate, candidates, self._n_workers)
+            ranked = sorted(zip(candidate_costs, candidates))[: self.k]
+            beam = [s for _, s in ranked]
+            if ranked[0][0] < best_cost:
+                best_cost, best = ranked[0][0], beam[0]
 
         return SearchResult(
             best, None, best_cost, "LocalBeamSearch",
