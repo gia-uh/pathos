@@ -201,3 +201,138 @@ class DifferentialEvolution(Algorithm):
         return SearchResult(best, None, best_cost, "DifferentialEvolution",
                             self.generations * self.pop_size, time.perf_counter() - t0,
                             self._goal_reached(best))
+
+
+def _is_numeric_vector(state: Any) -> bool:
+    """True if state is a non-empty list/tuple of numbers (int/float, no bool)."""
+    if not isinstance(state, (list, tuple)) or len(state) == 0:
+        return False
+    return all(
+        isinstance(x, (int, float)) and not isinstance(x, bool)
+        for x in state
+    )
+
+
+@register
+class ParticleSwarm(Algorithm):
+    """Particle Swarm Optimization — population of particles guided by
+    personal best and global best with inertia.
+
+    Each particle has a position vector and a velocity vector. The velocity
+    is updated each generation by an inertia component, a cognitive pull
+    toward the particle's own historical best, and a social pull toward the
+    swarm's global best. Position then advances by the velocity.
+
+    Requires: evaluate. State must be a numeric vector (list/tuple of
+    int/float). Bounds are estimated from the initial swarm (per-dimension
+    min/max expanded by 50%) unless supplied explicitly; positions are
+    clamped to bounds on each step.
+
+    Attributes:
+        requires: Capability set needed.
+        power_rank: 12 — sibling of DifferentialEvolution (13), kept below
+            DE so a registered tie doesn't reshuffle existing auto-picks.
+    """
+
+    requires = frozenset({Capability.EVALUATE})
+    power_rank = 12
+
+    @classmethod
+    def compatible_with(cls, space: Any) -> bool:
+        if not super().compatible_with(space):
+            return False
+        # Same continuous-only carveout as DifferentialEvolution.
+        for ancestor in type(space).__mro__:
+            if ancestor.__name__ in {"TourSpace", "CSPSpace"}:
+                return False
+        return _is_numeric_vector(space._initial)
+
+    def __init__(
+        self,
+        space: Any,
+        pop_size: int = 30,
+        generations: int = 100,
+        w: float = 0.7,           # inertia weight
+        c1: float = 1.5,          # cognitive coefficient
+        c2: float = 1.5,          # social coefficient
+        bounds: list[tuple[float, float]] | None = None,
+    ) -> None:
+        super().__init__(space)
+        self.pop_size = pop_size
+        self.generations = generations
+        self.w = w
+        self.c1 = c1
+        self.c2 = c2
+        self.bounds = bounds
+
+    def _estimate_bounds(
+        self, swarm: list[list[float]],
+    ) -> list[tuple[float, float]]:
+        """Per-dimension [min, max] across the initial swarm, expanded 50%
+        in each direction so particles can drift outside the seed range."""
+        dim = len(swarm[0])
+        out: list[tuple[float, float]] = []
+        for d in range(dim):
+            vals = [p[d] for p in swarm]
+            lo, hi = min(vals), max(vals)
+            span = hi - lo if hi > lo else max(abs(hi), 1.0)
+            out.append((lo - 0.5 * span, hi + 0.5 * span))
+        return out
+
+    def solve(self) -> SearchResult:
+        t0 = time.perf_counter()
+        # Each call to space._initial invokes the factory; gives diversity
+        # when the user's factory is randomized (the usual case).
+        positions: list[list[float]] = [
+            list(self.space._initial) for _ in range(self.pop_size)
+        ]
+        dim = len(positions[0])
+        bounds = self.bounds or self._estimate_bounds(positions)
+
+        # Velocities initialised in a fraction of the bound span.
+        velocities: list[list[float]] = []
+        for _ in range(self.pop_size):
+            v = [
+                random.uniform(-(hi - lo) * 0.1, (hi - lo) * 0.1)
+                for lo, hi in bounds
+            ]
+            velocities.append(v)
+
+        costs = batch_map(self.space._evaluate, positions, self._n_workers)
+        personal_best = [list(p) for p in positions]
+        personal_best_cost = list(costs)
+        gbest_idx = min(range(self.pop_size), key=lambda i: costs[i])
+        gbest = list(positions[gbest_idx])
+        gbest_cost = costs[gbest_idx]
+
+        for _ in range(self.generations):
+            for i in range(self.pop_size):
+                r1 = random.random()
+                r2 = random.random()
+                for d in range(dim):
+                    cog = self.c1 * r1 * (personal_best[i][d] - positions[i][d])
+                    soc = self.c2 * r2 * (gbest[d] - positions[i][d])
+                    velocities[i][d] = self.w * velocities[i][d] + cog + soc
+                    positions[i][d] = positions[i][d] + velocities[i][d]
+                    lo, hi = bounds[d]
+                    if positions[i][d] < lo:
+                        positions[i][d] = lo
+                        velocities[i][d] = 0.0
+                    elif positions[i][d] > hi:
+                        positions[i][d] = hi
+                        velocities[i][d] = 0.0
+
+            costs = batch_map(self.space._evaluate, positions, self._n_workers)
+            for i in range(self.pop_size):
+                if costs[i] < personal_best_cost[i]:
+                    personal_best_cost[i] = costs[i]
+                    personal_best[i] = list(positions[i])
+                    if costs[i] < gbest_cost:
+                        gbest_cost = costs[i]
+                        gbest = list(positions[i])
+
+        return SearchResult(
+            gbest, None, gbest_cost, "ParticleSwarm",
+            self.generations * self.pop_size, time.perf_counter() - t0,
+            self._goal_reached(gbest),
+        )
