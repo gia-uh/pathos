@@ -3,6 +3,7 @@ import signal
 import time
 import warnings
 from typing import TYPE_CHECKING
+from pathos.core.capabilities import Capability
 from pathos.core.result import SearchResult
 
 if TYPE_CHECKING:
@@ -37,6 +38,17 @@ class Solver:
                 f"No compatible algorithm for capabilities: "
                 f"{', '.join(c.name for c in self.space.capabilities)}"
             )
+        # When the space declares a goal, prefer algorithms that honour it
+        # — local-search / metaheuristic algorithms optimise @evaluate and
+        # ignore @goal, so they should not outrank goal-seeking algorithms
+        # on a goal-bearing problem just because their power_rank is higher.
+        # Falls back to the full pool if no goal-honouring algorithm fits.
+        if Capability.GOAL in self.space.capabilities:
+            goal_honoring = [
+                c for c in compatible if Capability.GOAL in c.requires
+            ]
+            if goal_honoring:
+                compatible = goal_honoring
         best = max(compatible, key=lambda cls: cls.power_rank)
         # warn about unused capabilities
         used = best.requires
