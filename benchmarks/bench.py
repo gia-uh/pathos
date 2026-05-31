@@ -3,12 +3,15 @@
 Run:   python -m benchmarks.bench
        python -m benchmarks.bench --repeat 5 --json results.json
        python -m benchmarks.bench --suites nqueens,tsp
+       python -m benchmarks.bench --all-algorithms --timeout 10
 """
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import random
+import signal
 import statistics
 import sys
 from dataclasses import dataclass, field, asdict
@@ -16,7 +19,9 @@ from typing import Callable
 
 import pathos.algorithms  # noqa: F401  — register algorithms
 from pathos import CSPSpace, Space, TourSpace
+from pathos.algorithms.base import Algorithm
 from pathos.core.result import SearchResult
+from pathos.core.solver import _REGISTRY
 
 
 # ---------------------------------------------------------------------------
@@ -195,17 +200,78 @@ class SizeStats:
     records: list[RunRecord] = field(default_factory=list)
 
 
-def run_one(suite: Suite, size: int, seed: int) -> RunRecord:
-    space = suite.build(size, seed)
+@contextlib.contextmanager
+def _wall_clock_limit(seconds: float):
+    """SIGALRM-based wall-clock guard. Unix only; one timer at a time."""
+    def handler(signum, frame):
+        raise TimeoutError(f"exceeded {seconds:.1f}s")
+
+    old = signal.signal(signal.SIGALRM, handler)
+    signal.setitimer(signal.ITIMER_REAL, seconds)
     try:
-        result: SearchResult = space.solver(timeout=suite.timeout).solve()
-    except TypeError:
-        # Some Space subclasses may not accept `timeout` in solver(); fall back.
-        result = space.solver().solve()
+        yield
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, 0)
+        signal.signal(signal.SIGALRM, old)
+
+
+def run_one(
+    suite: Suite,
+    size: int,
+    seed: int,
+    algo_cls: type[Algorithm] | None = None,
+    timeout: float | None = None,
+) -> RunRecord | None:
+    """Run one (suite, size) trial.
+
+    If `algo_cls` is given, force-select that algorithm (returns None if
+    incompatible with the space). Otherwise let the solver pick.
+    """
+    space = suite.build(size, seed)
+    if algo_cls is not None and not algo_cls.compatible_with(space):
+        return None
+
+    algo_name = algo_cls.__name__ if algo_cls else None
+    limit = timeout if timeout is not None else suite.timeout
+    try:
+        with _wall_clock_limit(limit):
+            result: SearchResult = space.solver(
+                candidates=[algo_cls] if algo_cls else None
+            ).solve()
+    except TimeoutError:
+        return RunRecord(
+            suite=suite.name,
+            size=size,
+            repeat=-1,
+            seed=seed,
+            algorithm=algo_name or "?",
+            found=False,
+            cost=None,
+            nodes_expanded=-1,
+            elapsed=limit,
+        )
+    except Exception as e:
+        # Algorithm declared compatibility but blew up at runtime
+        # (e.g. BFS/DFS on CSPSpace: unhashable dict state).
+        print(
+            f"    ! {algo_name or '?'} raised {type(e).__name__}: {e}",
+            file=sys.stderr,
+        )
+        return RunRecord(
+            suite=suite.name,
+            size=size,
+            repeat=-1,
+            seed=seed,
+            algorithm=algo_name or "?",
+            found=False,
+            cost=None,
+            nodes_expanded=-2,  # sentinel for "raised"
+            elapsed=0.0,
+        )
     return RunRecord(
         suite=suite.name,
         size=size,
-        repeat=-1,  # filled by caller
+        repeat=-1,
         seed=seed,
         algorithm=result.algorithm,
         found=result.found,
@@ -215,12 +281,13 @@ def run_one(suite: Suite, size: int, seed: int) -> RunRecord:
     )
 
 
-def run_suite(suite: Suite, repeat: int, base_seed: int) -> list[SizeStats]:
+def run_suite(suite: Suite, repeat: int, base_seed: int, timeout: float | None = None) -> list[SizeStats]:
     out: list[SizeStats] = []
     for size in suite.sizes:
         records: list[RunRecord] = []
         for r in range(repeat):
-            rec = run_one(suite, size, seed=base_seed + r)
+            rec = run_one(suite, size, seed=base_seed + r, timeout=timeout)
+            assert rec is not None  # only None when algo_cls given
             rec.repeat = r
             records.append(rec)
             print(
@@ -249,6 +316,158 @@ def run_suite(suite: Suite, repeat: int, base_seed: int) -> list[SizeStats]:
             )
         )
     return out
+
+
+# ---------------------------------------------------------------------------
+# Head-to-head: every compatible algorithm per (suite, size)
+# ---------------------------------------------------------------------------
+
+@dataclass
+class HeadToHeadCell:
+    algorithm: str
+    size: int
+    runs: int
+    found_rate: float
+    timeouts: int
+    errors: int
+    elapsed_median: float | None  # None if all runs timed out / failed
+    nodes_median: int | None
+    cost_median: float | None
+
+
+def run_head_to_head(
+    suite: Suite, repeat: int, base_seed: int, timeout: float
+) -> dict[str, list[HeadToHeadCell]]:
+    """For each size, run every algorithm in _REGISTRY compatible with the
+    space built at that size. Returns {algorithm_name: [cell_per_size]}."""
+    # Use first-seed instance to enumerate compatibility at each size.
+    out: dict[str, list[HeadToHeadCell]] = {}
+    for size in suite.sizes:
+        probe = suite.build(size, base_seed)
+        compatible = [c for c in _REGISTRY if c.compatible_with(probe)]
+        for algo_cls in compatible:
+            records: list[RunRecord] = []
+            for r in range(repeat):
+                rec = run_one(
+                    suite, size,
+                    seed=base_seed + r,
+                    algo_cls=algo_cls,
+                    timeout=timeout,
+                )
+                if rec is None:
+                    continue
+                rec.repeat = r
+                records.append(rec)
+                if rec.nodes_expanded == -1:
+                    tag = "T/O"
+                elif rec.nodes_expanded == -2:
+                    tag = "ERR"
+                else:
+                    tag = f"{rec.elapsed:.4f}s"
+                found = "✓" if rec.found else "✗"
+                print(
+                    f"  {suite.name} {suite.size_label}={size} "
+                    f"{algo_cls.__name__:22s} run {r + 1}/{repeat}: "
+                    f"{tag:>10s} {found} nodes={rec.nodes_expanded}",
+                    file=sys.stderr,
+                )
+
+            if not records:
+                continue
+
+            timeouts = sum(1 for r in records if r.nodes_expanded == -1)
+            errors = sum(1 for r in records if r.nodes_expanded == -2)
+            successful = [r for r in records if r.found]
+            elapsed_med = (
+                statistics.median(r.elapsed for r in successful)
+                if successful else None
+            )
+            nodes_med = (
+                int(statistics.median(r.nodes_expanded for r in successful))
+                if successful else None
+            )
+            costs = [r.cost for r in successful if r.cost is not None]
+            cost_med = statistics.median(costs) if costs else None
+
+            cell = HeadToHeadCell(
+                algorithm=algo_cls.__name__,
+                size=size,
+                runs=len(records),
+                found_rate=sum(1 for r in records if r.found) / len(records),
+                timeouts=timeouts,
+                errors=errors,
+                elapsed_median=elapsed_med,
+                nodes_median=nodes_med,
+                cost_median=cost_med,
+            )
+            out.setdefault(algo_cls.__name__, []).append(cell)
+    return out
+
+
+def render_head_to_head_markdown(
+    all_h2h: dict[str, dict[str, list[HeadToHeadCell]]],
+) -> str:
+    """all_h2h: {suite_name: {algorithm_name: [cell_per_size]}}"""
+    lines: list[str] = ["# PATHOS head-to-head benchmark\n"]
+    for suite_name, by_algo in all_h2h.items():
+        suite = SUITES[suite_name]
+        sizes = suite.sizes
+        lines.append(f"## {suite_name} — elapsed seconds (median)\n")
+        header = f"| algorithm | " + " | ".join(
+            f"{suite.size_label}={s}" for s in sizes
+        ) + " |"
+        sep = "|---|" + "|".join("---:" for _ in sizes) + "|"
+        lines.append(header)
+        lines.append(sep)
+
+        # Order algorithms by registry order (deterministic).
+        ordered_names = [c.__name__ for c in _REGISTRY if c.__name__ in by_algo]
+        for name in ordered_names:
+            cells_by_size = {c.size: c for c in by_algo[name]}
+            row = [name]
+            for s in sizes:
+                cell = cells_by_size.get(s)
+                if cell is None:
+                    row.append("—")
+                elif cell.errors == cell.runs:
+                    row.append("ERR")
+                elif cell.timeouts == cell.runs:
+                    row.append("T/O")
+                elif cell.elapsed_median is None:
+                    row.append("fail")
+                else:
+                    suffix = ""
+                    if cell.timeouts:
+                        suffix = f" ({cell.timeouts}T/O)"
+                    elif cell.errors:
+                        suffix = f" ({cell.errors}ERR)"
+                    elif cell.found_rate < 1.0:
+                        suffix = f" ({int((1 - cell.found_rate) * cell.runs)}✗)"
+                    row.append(f"{cell.elapsed_median:.4f}{suffix}")
+            lines.append("| " + " | ".join(row) + " |")
+        lines.append("")
+
+        # Cost-quality sub-table (only when at least one cell has cost data)
+        has_cost = any(
+            any(c.cost_median is not None for c in cells)
+            for cells in by_algo.values()
+        )
+        if has_cost:
+            lines.append(f"### {suite_name} — solution cost (median)\n")
+            lines.append(header)
+            lines.append(sep)
+            for name in ordered_names:
+                cells_by_size = {c.size: c for c in by_algo[name]}
+                row = [name]
+                for s in sizes:
+                    cell = cells_by_size.get(s)
+                    if cell is None or cell.cost_median is None:
+                        row.append("—")
+                    else:
+                        row.append(f"{cell.cost_median:.2f}")
+                lines.append("| " + " | ".join(row) + " |")
+            lines.append("")
+    return "\n".join(lines)
 
 
 # ---------------------------------------------------------------------------
@@ -287,6 +506,13 @@ def main() -> int:
                         help=f"comma-separated suite names (default: all = {','.join(SUITES)})")
     parser.add_argument("--json", type=str, default=None,
                         help="also write raw records to this JSON path")
+    parser.add_argument("--all-algorithms", action="store_true",
+                        help="head-to-head: run every compatible algorithm "
+                             "per (suite, size), not just the solver's pick")
+    parser.add_argument("--timeout", type=float, default=10.0,
+                        help="per-run wall-clock timeout in seconds "
+                             "(default: 10, used in --all-algorithms mode "
+                             "and as the cap in normal mode)")
     args = parser.parse_args()
 
     selected = [s.strip() for s in args.suites.split(",") if s.strip()]
@@ -295,10 +521,34 @@ def main() -> int:
         print(f"unknown suites: {unknown}. known: {list(SUITES)}", file=sys.stderr)
         return 2
 
+    if args.all_algorithms:
+        all_h2h: dict[str, dict[str, list[HeadToHeadCell]]] = {}
+        for name in selected:
+            print(f"\n→ suite: {name} (head-to-head)", file=sys.stderr)
+            all_h2h[name] = run_head_to_head(
+                SUITES[name], args.repeat, args.seed, args.timeout
+            )
+        print(render_head_to_head_markdown(all_h2h))
+
+        if args.json:
+            payload = {
+                suite_name: {
+                    algo: [asdict(c) for c in cells]
+                    for algo, cells in by_algo.items()
+                }
+                for suite_name, by_algo in all_h2h.items()
+            }
+            with open(args.json, "w") as f:
+                json.dump(payload, f, indent=2)
+            print(f"\nwrote raw records to {args.json}", file=sys.stderr)
+        return 0
+
     all_stats: dict[str, list[SizeStats]] = {}
     for name in selected:
         print(f"\n→ suite: {name}", file=sys.stderr)
-        all_stats[name] = run_suite(SUITES[name], args.repeat, args.seed)
+        all_stats[name] = run_suite(
+            SUITES[name], args.repeat, args.seed, args.timeout
+        )
 
     print(render_markdown(all_stats))
 
