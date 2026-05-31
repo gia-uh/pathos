@@ -1,10 +1,13 @@
 # Benchmark findings
 
-**Status update (after commits 087059b / 2e3efaa / c4f0014 / e7ae4e4 / d4d0989 / ddd85dd):**
-§1a–d, §2a, §3a FIXED; §2b auto-pick part fixed (HC vs TS on pure-optimization TSP still
-open); `.timeout()` wired; GA-on-TSP default operators fixed (not originally tracked here,
-see commit ddd85dd — GA at 25 cities went 1069 → 509). Remaining open: §2b tail
-(HC vs TS rank), §2c (A\* vs Weighted tradeoff), §3b (DFS quality caveat).
+**Status update (through commit 89de86b):**
+§1a–d, §2a, §2b (now FULLY closed — HC.score_for bumps over TS on TSP),
+§3a, §3b (README caveat) all FIXED. `.timeout()` wired. GA-on-TSP default
+operators fixed (commit ddd85dd) and GA auto-pick demoted on pure-{evaluate}
+spaces (commit 89de86b) so DE/PSO win on continuous optimization.
+Selector now uses context-aware `score_for(space)` instead of static
+`power_rank`. Remaining open: §2c (A\* vs WeightedAStar — needs a
+solver mode for "ε-optimal is fine, give me speed").
 
 Bugs and surprises surfaced by `python -m benchmarks.bench --all-algorithms`.
 Numbers below come from a 3-repeat run on Intel i7-6820HQ @ 2.70 GHz, Python
