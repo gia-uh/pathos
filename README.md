@@ -116,16 +116,16 @@ i7-6820HQ @ 2.70 GHz, Python 3.13. Algorithms are the ones auto-selected by
 `space.solver()`. Reproduce with the same command; raw records dumped via
 `--json`.
 
-**N-Queens (ForwardChecking, CSPSpace)**
+**N-Queens (Backtracking, CSPSpace)**
 
 | N | elapsed (s, median) | nodes expanded |
 |---|---:|---:|
-| 6  | 0.0005 | 31 |
-| 8  | 0.0034 | 113 |
-| 10 | 0.0042 | 102 |
-| 12 | 0.0199 | 261 |
-| 14 | 0.2340 | 1 899 |
-| 16 | 1.5951 | 10 052 |
+| 6  | 0.0003 | 31 |
+| 8  | 0.0022 | 113 |
+| 10 | 0.0031 | 102 |
+| 12 | 0.0149 | 261 |
+| 14 | 0.1726 | 1 899 |
+| 16 | 1.2363 | 10 052 |
 
 **TSP (TabuSearch, TourSpace, 100 iters)**
 

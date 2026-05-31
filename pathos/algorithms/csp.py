@@ -63,15 +63,21 @@ class ForwardChecking(Algorithm):
 
     Before recursing, checks that each child has at least one valid successor.
 
+    The current look-ahead is shallow (a child is pruned only when it has no
+    successors and is not itself a goal), so node counts match plain
+    Backtracking and the constant factor is higher. Until real domain-level
+    pruning is implemented, FC is ranked below Backtracking so the auto-
+    solver picks the faster of the two.
+
     Requires: successors, goal.
 
     Attributes:
         requires: Capability set needed.
-        power_rank: 11.
+        power_rank: 8 (below Backtracking's 9).
     """
 
     requires = frozenset({Capability.SUCCESSORS, Capability.GOAL})
-    power_rank = 11
+    power_rank = 8
 
     @classmethod
     def compatible_with(cls, space: Any) -> bool:
