@@ -58,7 +58,7 @@ class HillClimbing(Algorithm):
 
         return SearchResult(
             best_state, None, best_cost, "HillClimbing",
-            expanded, time.perf_counter() - t0, True,
+            expanded, time.perf_counter() - t0, self._goal_reached(best_state),
         )
 
 
@@ -107,7 +107,7 @@ class TabuSearch(Algorithm):
 
         return SearchResult(
             best, None, best_cost, "TabuSearch",
-            expanded, time.perf_counter() - t0, True,
+            expanded, time.perf_counter() - t0, self._goal_reached(best),
         )
 
 
@@ -154,5 +154,5 @@ class LocalBeamSearch(Algorithm):
 
         return SearchResult(
             best, None, best_cost, "LocalBeamSearch",
-            expanded, time.perf_counter() - t0, True,
+            expanded, time.perf_counter() - t0, self._goal_reached(best),
         )

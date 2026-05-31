@@ -53,7 +53,8 @@ class SimulatedAnnealing(Algorithm):
             T *= self.cooling
 
         return SearchResult(best, None, best_cost, "SimulatedAnnealing",
-                            self.max_iter, time.perf_counter() - t0, True)
+                            self.max_iter, time.perf_counter() - t0,
+                            self._goal_reached(best))
 
 
 @register
@@ -108,7 +109,8 @@ class GeneticAlgorithm(Algorithm):
                 best, best_cost = population[gen_best_idx], gen_costs[gen_best_idx]
 
         return SearchResult(best, None, best_cost, "GeneticAlgorithm",
-                            self.generations * self.pop_size, time.perf_counter() - t0, True)
+                            self.generations * self.pop_size, time.perf_counter() - t0,
+                            self._goal_reached(best))
 
 
 @register
@@ -177,4 +179,5 @@ class DifferentialEvolution(Algorithm):
                         best, best_cost = trials[i], trial_costs[i]
 
         return SearchResult(best, None, best_cost, "DifferentialEvolution",
-                            self.generations * self.pop_size, time.perf_counter() - t0, True)
+                            self.generations * self.pop_size, time.perf_counter() - t0,
+                            self._goal_reached(best))

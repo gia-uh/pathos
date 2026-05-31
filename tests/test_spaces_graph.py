@@ -1,4 +1,5 @@
 import pathos.algorithms  # ensure all algorithms are registered
+from pathos.algorithms.uninformed import BFS
 from pathos.spaces.graph import GraphSpace
 
 
@@ -31,5 +32,11 @@ def test_graphspace_bfs_without_heuristic():
     @space.goal
     def reached(n): return n == "c"
 
-    result = space.solver().solve()
+    # Pin BFS explicitly — the bare auto-pick lands on TabuSearch because
+    # GraphSpace auto-declares EVALUATE from edge weights, and TabuSearch
+    # outranks BFS. The auto-pick mismatch is tracked in FINDINGS §2b;
+    # this test's intent (per its name) is "BFS works on a goal-bearing
+    # GraphSpace without a heuristic."
+    result = space.solver(candidates=[BFS]).solve()
     assert result.found
+    assert result.solution == "c"
