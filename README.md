@@ -109,6 +109,48 @@ result.elapsed       # seconds
 result.found         # bool
 ```
 
+## Performance
+
+Reference numbers from `python -m benchmarks.bench --repeat 3` on an Intel
+i7-6820HQ @ 2.70 GHz, Python 3.13. Algorithms are the ones auto-selected by
+`space.solver()`. Reproduce with the same command; raw records dumped via
+`--json`.
+
+**N-Queens (ForwardChecking, CSPSpace)**
+
+| N | elapsed (s, median) | nodes expanded |
+|---|---:|---:|
+| 6  | 0.0005 | 31 |
+| 8  | 0.0034 | 113 |
+| 10 | 0.0042 | 102 |
+| 12 | 0.0199 | 261 |
+| 14 | 0.2340 | 1 899 |
+| 16 | 1.5951 | 10 052 |
+
+**TSP (TabuSearch, TourSpace, 100 iters)**
+
+| cities | elapsed (s, median) | tour cost (median) |
+|---:|---:|---:|
+| 5  | 0.0014 | 197.8 |
+| 8  | 0.0060 | 253.3 |
+| 12 | 0.0224 | 272.2 |
+| 16 | 0.0439 | 354.9 |
+| 20 | 0.0800 | 383.4 |
+| 25 | 0.1593 | 409.3 |
+
+**8-Puzzle (A\* + Manhattan)**
+
+| scramble depth | elapsed (s, median) | nodes expanded | solution length |
+|---:|---:|---:|---:|
+| 10 | 0.0001 | 12    | 10 |
+| 20 | 0.0042 | 461   | 20 |
+| 30 | 0.0097 | 1 397 | 24 |
+| 40 | 0.0127 | 1 728 | 26 |
+| 50 | 0.0086 | 1 186 | 22 |
+
+Solution length plateaus around 22–26 because the 8-puzzle state-space
+diameter is ~31 — deeper scrambles don't make harder instances.
+
 ## Examples
 
 - [Route Planning (A*)](examples/route_planning.py)
