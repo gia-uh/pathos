@@ -150,6 +150,17 @@ Not a bug; a missing axis. Worth documenting.
 
 ### 3a. Local-search algos report `found=True, cost=1.0` on puzzle8
 
+**FIXED in e7ae4e4** — `Algorithm._goal_reached(state)` consults `space._goal(state)`
+when the GOAL capability is declared. All six local-search/metaheuristic
+algorithms route `found` through it. On no-goal pure-optimization spaces
+behaviour is unchanged. 2 regression tests parametrised over all six classes.
+
+Surfaced a latent test bug at the same time: `test_graphspace_bfs_without_heuristic`
+was passing accidentally because the auto-pick was TabuSearch (not BFS) and the
+bug made TS report `found=True` falsely; test now pins BFS via `candidates=[BFS]`.
+
+Original observation:
+
 HillClimbing/TabuSearch/LocalBeamSearch/SimulatedAnnealing/GA/DE all report
 `found=True` and `cost=1.0` on every 8-puzzle run — but they never reach
 GOAL. They ignore the `@goal` predicate and minimize the `@evaluate` function
