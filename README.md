@@ -45,7 +45,7 @@ pip install pathos-ai
 | Declare | Algorithms Available |
 |---------|---------------------|
 | `@evaluate` | Simulated Annealing, Genetic Algorithm, DE |
-| `@successors + @goal` | BFS, DFS, IDDFS |
+| `@successors + @goal` | BFS, DFS, IDDFS *(DFS is non-optimal — for shortest paths prefer BFS/UCS)* |
 | `@successors + @evaluate` | Hill Climbing, Tabu Search |
 | `@successors + @goal + @heuristic` | A*, IDA*, Greedy Best-First |
 | `@successors + @goal + @heuristic + @evaluate` | Weighted A*, UCS |

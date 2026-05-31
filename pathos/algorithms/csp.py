@@ -110,7 +110,20 @@ class ForwardChecking(Algorithm):
 
 
 class AC3(Algorithm):
-    """AC-3 arc consistency — use via CSPSpace, not directly on generic Space."""
+    """AC-3 arc consistency — domain-pruning preprocessor for CSPs.
+
+    AC-3 is not a stand-alone CSP solver: it iterates over arcs and prunes
+    domain values that can't satisfy any binary constraint, then hands off
+    a (possibly smaller) problem to Backtracking / ForwardChecking. It is
+    intentionally NOT @register'd so the auto-selector won't pick it as a
+    terminal solver — its `solve()` returns the pruned domains, not an
+    assignment, so power_rank=22 would mis-rank it above MinConflicts.
+
+    Use directly: `AC3(csp_space).solve()` returns a SearchResult whose
+    `.solution` is the pruned-domain dict. Production code typically
+    composes AC-3 with a Backtracking-style solver — see issue tracker
+    for the planned `pathos.algorithms.preprocessors` API.
+    """
     requires = frozenset({Capability.VARIABLES, Capability.DOMAINS, Capability.CONSTRAINTS})
     power_rank = 22
 
