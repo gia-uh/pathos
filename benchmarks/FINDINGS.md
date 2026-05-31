@@ -1,7 +1,10 @@
 # Benchmark findings
 
-**Status update (after commits 087059b / 2e3efaa / c4f0014):** §1a–d, §2a, and
-the `.timeout()` part of §0 are FIXED. Remaining open: §2b, §2c, §3a, §3b.
+**Status update (after commits 087059b / 2e3efaa / c4f0014 / e7ae4e4 / d4d0989 / ddd85dd):**
+§1a–d, §2a, §3a FIXED; §2b auto-pick part fixed (HC vs TS on pure-optimization TSP still
+open); `.timeout()` wired; GA-on-TSP default operators fixed (not originally tracked here,
+see commit ddd85dd — GA at 25 cities went 1069 → 509). Remaining open: §2b tail
+(HC vs TS rank), §2c (A\* vs Weighted tradeoff), §3b (DFS quality caveat).
 
 Bugs and surprises surfaced by `python -m benchmarks.bench --all-algorithms`.
 Numbers below come from a 3-repeat run on Intel i7-6820HQ @ 2.70 GHz, Python
