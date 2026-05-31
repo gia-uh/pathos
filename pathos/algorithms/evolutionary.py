@@ -125,6 +125,19 @@ class DifferentialEvolution(Algorithm):
     requires = frozenset({Capability.EVALUATE})
     power_rank = 13
 
+    @classmethod
+    def compatible_with(cls, space: Any) -> bool:
+        # DE generates real-valued perturbations; it isn't valid for spaces
+        # whose state is a discrete permutation (TourSpace) or partial
+        # assignment dict (CSPSpace).
+        if not super().compatible_with(space):
+            return False
+        # Use string class names to avoid a reverse import from spaces/.
+        for ancestor in type(space).__mro__:
+            if ancestor.__name__ in {"TourSpace", "CSPSpace"}:
+                return False
+        return True
+
     def __init__(self, space: Any, pop_size: int = 20, generations: int = 100,
                  F: float = 0.8, CR: float = 0.9) -> None:
         super().__init__(space)

@@ -8,6 +8,15 @@ from pathos.core.result import SearchResult
 from pathos.core.solver import register
 
 
+def _is_csp_shaped(space: Any) -> bool:
+    """True if state is a partial-assignment dict — the precondition for the
+    incremental-extension recursion used by Backtracking / ForwardChecking /
+    MinConflicts. Without this guard they're offered for any
+    successors+goal space and recurse forever (8-puzzle: RecursionError) or
+    silent-fail (MinConflicts on plain Space)."""
+    return isinstance(space._initial, dict)
+
+
 @register
 class Backtracking(Algorithm):
     """Backtracking search — systematic recursive CSP solver.
@@ -23,6 +32,10 @@ class Backtracking(Algorithm):
 
     requires = frozenset({Capability.SUCCESSORS, Capability.GOAL})
     power_rank = 9
+
+    @classmethod
+    def compatible_with(cls, space: Any) -> bool:
+        return super().compatible_with(space) and _is_csp_shaped(space)
 
     def _bt(self, state: Any, expanded: list[int]) -> Any | None:
         if self.space._goal(state):
@@ -59,6 +72,10 @@ class ForwardChecking(Algorithm):
 
     requires = frozenset({Capability.SUCCESSORS, Capability.GOAL})
     power_rank = 11
+
+    @classmethod
+    def compatible_with(cls, space: Any) -> bool:
+        return super().compatible_with(space) and _is_csp_shaped(space)
 
     def _fc(self, state: Any, expanded: list[int]) -> Any | None:
         if self.space._goal(state):
@@ -136,6 +153,10 @@ class MinConflicts(Algorithm):
 
     requires = frozenset({Capability.SUCCESSORS, Capability.GOAL, Capability.EVALUATE})
     power_rank = 19
+
+    @classmethod
+    def compatible_with(cls, space: Any) -> bool:
+        return super().compatible_with(space) and _is_csp_shaped(space)
 
     def __init__(self, space: Any, max_iter: int = 1000) -> None:
         super().__init__(space)

@@ -8,6 +8,17 @@ from pathos.core.result import SearchResult
 from pathos.core.solver import register
 
 
+def _has_hashable_state(space: Any) -> bool:
+    """True if space._initial is hashable. Uninformed/informed search needs
+    this for the visited set; spaces like CSPSpace use dict states and
+    fundamentally cannot satisfy it."""
+    try:
+        hash(space._initial)
+        return True
+    except TypeError:
+        return False
+
+
 @register
 class BFS(Algorithm):
     """Breadth-First Search — complete, optimal for unit-cost graphs.
@@ -21,6 +32,10 @@ class BFS(Algorithm):
 
     requires = frozenset({Capability.SUCCESSORS, Capability.GOAL})
     power_rank = 10
+
+    @classmethod
+    def compatible_with(cls, space: Any) -> bool:
+        return super().compatible_with(space) and _has_hashable_state(space)
 
     def solve(self) -> SearchResult:
         t0 = time.perf_counter()
@@ -64,6 +79,10 @@ class DFS(Algorithm):
     requires = frozenset({Capability.SUCCESSORS, Capability.GOAL})
     power_rank = 5
 
+    @classmethod
+    def compatible_with(cls, space: Any) -> bool:
+        return super().compatible_with(space) and _has_hashable_state(space)
+
     def solve(self) -> SearchResult:
         t0 = time.perf_counter()
         initial = self.space._initial
@@ -102,6 +121,10 @@ class IDDFS(Algorithm):
 
     requires = frozenset({Capability.SUCCESSORS, Capability.GOAL})
     power_rank = 8
+
+    @classmethod
+    def compatible_with(cls, space: Any) -> bool:
+        return super().compatible_with(space) and _has_hashable_state(space)
 
     def _dls(self, state: Any, path: list[Any], depth: int, visited: set[Any]) -> tuple[Any, list[Any]] | None:
         if self.space._goal(state):
@@ -146,6 +169,10 @@ class UCS(Algorithm):
 
     requires = frozenset({Capability.SUCCESSORS, Capability.GOAL, Capability.EVALUATE})
     power_rank = 12
+
+    @classmethod
+    def compatible_with(cls, space: Any) -> bool:
+        return super().compatible_with(space) and _has_hashable_state(space)
 
     def solve(self) -> SearchResult:
         import heapq
