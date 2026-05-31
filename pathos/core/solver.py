@@ -1,6 +1,7 @@
 from __future__ import annotations
-import warnings
+import signal
 import time
+import warnings
 from typing import TYPE_CHECKING
 from pathos.core.result import SearchResult
 
@@ -52,4 +53,24 @@ class Solver:
 
     def solve(self) -> SearchResult:
         cls = self._select()
-        return cls(self.space).solve()
+        if self.timeout is None:
+            return cls(self.space).solve()
+
+        # Wall-clock guard via SIGALRM. Unix-only and main-thread-only;
+        # multiprocessing workers spawned by .parallel(n) are out of scope
+        # because solve() is the top-level entry, always on the main thread.
+        def _handler(signum, frame):  # type: ignore[no-untyped-def]
+            raise TimeoutError(f"solver timeout exceeded ({self.timeout}s)")
+
+        prev_handler = signal.signal(signal.SIGALRM, _handler)
+        signal.setitimer(signal.ITIMER_REAL, self.timeout)
+        t0 = time.perf_counter()
+        try:
+            return cls(self.space).solve()
+        except TimeoutError:
+            return SearchResult.not_found(
+                cls.__name__, 0, time.perf_counter() - t0,
+            )
+        finally:
+            signal.setitimer(signal.ITIMER_REAL, 0)
+            signal.signal(signal.SIGALRM, prev_handler)
