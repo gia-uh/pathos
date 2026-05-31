@@ -57,7 +57,7 @@ validation pass.
 
 ### Evolutionary / Metaheuristic (spec: 4)
 - Genetic Algorithm ✓ · Simulated Annealing ✓ · Differential Evolution ✓
-- **PSO ✗** — listed in spec, no class in registry.
+- **PSO ✓** — `ParticleSwarm` added in commit 52f4e51. Pure-Python implementation requiring numeric vector state; same continuous-only carveout as DE.
 
 ### Adversarial (spec: 4)
 - Minimax ✓ · Negamax ✓ · Alpha-Beta ✓ · MCTS ✓
