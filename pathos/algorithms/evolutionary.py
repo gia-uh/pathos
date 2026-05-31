@@ -72,6 +72,20 @@ class GeneticAlgorithm(Algorithm):
     requires = frozenset({Capability.EVALUATE})
     power_rank = 14
 
+    @classmethod
+    def score_for(cls, space: Any) -> float:
+        """Without @successors AND without user-supplied operators (which
+        the auto-selector can't inspect), GA degenerates to deepcopy
+        children with no variation — see commit ddd85dd. Cede the
+        auto-pick to DifferentialEvolution/ParticleSwarm on pure-
+        {evaluate} spaces by penalizing the rank there. A user who
+        wants GA on a pure-{evaluate} space passes it through
+        `solver(candidates=[GeneticAlgorithm])` with real operators.
+        """
+        if Capability.SUCCESSORS not in space.capabilities:
+            return float(cls.power_rank) - 10  # 14 → 4, below DE(13)/PSO(12)
+        return float(cls.power_rank)
+
     def __init__(self, space: Any, pop_size: int = 50, generations: int = 100,
                  crossover_fn: Callable[..., Any] | None = None,
                  mutate_fn: Callable[..., Any] | None = None,

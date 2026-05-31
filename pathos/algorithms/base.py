@@ -30,6 +30,25 @@ class Algorithm(ABC):
     def compatible_with(cls, space: Space) -> bool:
         return cls.requires <= space.capabilities
 
+    @classmethod
+    def score_for(cls, space: Space) -> float:
+        """Context-aware preference score for `space`. Higher = preferred.
+
+        The auto-solver picks the compatible algorithm with the highest
+        `score_for(space)`. Defaults to `float(power_rank)`, so any
+        algorithm that doesn't care about problem context keeps its
+        existing fixed-rank behavior.
+
+        Override to encode self-knowledge that isn't captured by the
+        coarse static rank — for example, "I work well on small problems
+        but lose to a sibling on large ones", or "without `@successors`
+        I degenerate to a no-op, so cede to siblings that don't need it".
+
+        Returning a value below `power_rank` lets the algorithm cede to
+        better-suited siblings without changing its global ordering.
+        """
+        return float(cls.power_rank)
+
     def _goal_reached(self, state: Any) -> bool:
         """Whether `state` satisfies the space's declared goal predicate.
 

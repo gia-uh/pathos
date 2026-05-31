@@ -50,9 +50,14 @@ def test_graphspace_with_goal_picks_goal_honoring():
     assert result.solution == "c"
 
 
-def test_pure_optimization_still_picks_metaheuristic():
-    """When no @goal is declared, local-search/metaheuristic should still
-    win on power_rank — the preference is goal-aware, not blanket."""
+def test_pure_optimization_still_picks_local_search():
+    """When no @goal is declared, a local-search/metaheuristic should win.
+    HillClimbing now beats TabuSearch via the size-aware score_for bump
+    on vector-state pure-optimization problems — see FINDINGS §2b and
+    `HillClimbing.score_for`. The point of this test is that the auto-
+    pick stays inside the local-search family, not which specific
+    member wins."""
+    from pathos.algorithms.local import HillClimbing
     cities = list(range(5))
     distances = {(i, j): 1.0 for i in cities for j in cities if i != j}
     space = TourSpace(nodes=cities, distances=distances)
@@ -62,9 +67,7 @@ def test_pure_optimization_still_picks_metaheuristic():
         return 1.0
 
     picked = space.solver()._select()
-    # TourSpace with @evaluate only — no goal, so TabuSearch (highest
-    # local-search rank) is still the right pick.
-    assert picked is TabuSearch
+    assert picked is HillClimbing
 
 
 def test_8puzzle_still_picks_astar():

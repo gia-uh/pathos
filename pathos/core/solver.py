@@ -49,7 +49,7 @@ class Solver:
             ]
             if goal_honoring:
                 compatible = goal_honoring
-        best = max(compatible, key=lambda cls: cls.power_rank)
+        best = max(compatible, key=lambda cls: cls.score_for(self.space))
         # warn about unused capabilities
         used = best.requires
         declared = self.space.capabilities

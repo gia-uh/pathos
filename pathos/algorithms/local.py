@@ -23,6 +23,23 @@ class HillClimbing(Algorithm):
     requires = frozenset({Capability.SUCCESSORS, Capability.EVALUATE})
     power_rank = 15
 
+    @classmethod
+    def score_for(cls, space: Any) -> float:
+        """Bump HC above TabuSearch (18) on vector-state pure-optimization
+        problems. Empirically (benchmarks/FINDINGS.md §2b) HC matches or
+        beats TS on every TourSpace size from 5 to 25 cities and is
+        4-5× faster — the rigorous-sounding "TS escapes local optima"
+        argument doesn't pay off on smooth 2-opt landscapes. Goal-bearing
+        problems are unaffected because the goal-preference filter in
+        Solver._select already eliminates HC there.
+        """
+        if (
+            Capability.GOAL not in space.capabilities
+            and isinstance(space._initial, (list, tuple))
+        ):
+            return float(cls.power_rank) + 5  # 15+5=20, above TabuSearch=18
+        return float(cls.power_rank)
+
     def __init__(self, space: Any, max_restarts: int = 1, max_sideways: int = 0) -> None:
         super().__init__(space)
         self.max_restarts = max_restarts
