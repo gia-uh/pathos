@@ -90,18 +90,38 @@ class GeneticAlgorithm(Algorithm):
         best_idx = min(range(len(population)), key=lambda i: costs[i])
         best, best_cost = population[best_idx], costs[best_idx]
 
+        # Default operators when none supplied. If @successors is declared
+        # we sample a random neighbor — works for any neighborhood-bearing
+        # space (TSP via 2-opt, 8-puzzle via tile moves, GraphSpace via
+        # adjacency). Falls back to deepcopy only when no successors are
+        # available, which leaves GA in its no-variation degenerate mode
+        # for pure-{evaluate} spaces — those should pass real operators.
+        has_succ = Capability.SUCCESSORS in self.space.capabilities
+
+        def _random_neighbor(state: Any) -> Any:
+            neighbors = list(self.space._successors(state))
+            if not neighbors:
+                return state
+            return random.choice(neighbors)[1]
+
+        def _default_crossover(p1: Any, p2: Any) -> Any:
+            return _random_neighbor(p1) if has_succ else copy.deepcopy(p1)
+
+        def _default_mutate(child: Any) -> Any:
+            return _random_neighbor(child) if has_succ else child
+
+        crossover = self.crossover_fn or _default_crossover
+        mutate = self.mutate_fn or _default_mutate
+
         for _ in range(self.generations):
             costs = batch_map(self.space._evaluate, population, self._n_workers)
             pairs = sorted(zip(costs, population))
             population = [x for _, x in pairs[: self.pop_size // 2]]
             while len(population) < self.pop_size:
                 p1, p2 = random.sample(population, 2)
-                if self.crossover_fn:
-                    child = self.crossover_fn(p1, p2)
-                else:
-                    child = copy.deepcopy(p1)
-                if self.mutate_fn and random.random() < self.mutation_rate:
-                    child = self.mutate_fn(child)
+                child = crossover(p1, p2)
+                if random.random() < self.mutation_rate:
+                    child = mutate(child)
                 population.append(child)
             gen_costs = batch_map(self.space._evaluate, population, self._n_workers)
             gen_best_idx = min(range(len(population)), key=lambda i: gen_costs[i])
