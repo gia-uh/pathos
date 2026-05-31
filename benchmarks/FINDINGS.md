@@ -110,6 +110,15 @@ until it does.
 
 ### 2b. TabuSearch picked over HillClimbing on TSP — 5× slower, no quality gain
 
+**PARTIALLY FIXED in d4d0989** — the underlying issue (rank is type-blind) is
+now mitigated when GOAL is declared: Solver._select prefers goal-honoring
+algorithms over goal-ignoring local-search/metaheuristics. So
+GraphSpace+goal now picks UCS (was TabuSearch). Still open: HC vs TS on
+pure-optimization TSP — that's a finer rank-vs-size question requiring
+either size-aware ranking or accepting power_rank as a coarse default.
+
+Original observation:
+
 | cities | HC time | TS time | HC cost | TS cost |
 |---:|---:|---:|---:|---:|
 |  5 | 0.0001 | 0.0014 | 197.76 | 197.76 |
