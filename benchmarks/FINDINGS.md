@@ -1,5 +1,8 @@
 # Benchmark findings
 
+**Status update (after commits 087059b / 2e3efaa / c4f0014):** §1a–d, §2a, and
+the `.timeout()` part of §0 are FIXED. Remaining open: §2b, §2c, §3a, §3b.
+
 Bugs and surprises surfaced by `python -m benchmarks.bench --all-algorithms`.
 Numbers below come from a 3-repeat run on Intel i7-6820HQ @ 2.70 GHz, Python
 3.13. Reproduce with `--all-algorithms --repeat 3 --timeout 10 --json …`.
@@ -12,6 +15,12 @@ losing to a sibling), then reporting issues.
 ---
 
 ## 1. Capability-lattice gaps — algorithms claim compatibility, crash at runtime
+
+**FIXED in c4f0014** — each algorithm below gained a `compatible_with`
+override that adds the missing precondition (hashable state / not
+TourSpace+CSPSpace / dict state). 9 regression tests at
+`tests/test_compatibility_guards.py`. Auto-selector and explicit
+`candidates=[X]` both honour the new gate.
 
 `Algorithm.compatible_with(space)` returns `True` when `cls.requires ⊆
 space.capabilities`. Several algorithms have requirements that are necessary
@@ -76,6 +85,12 @@ useful behavior there.
 The head-to-head shows the auto-pick losing on real workloads.
 
 ### 2a. ForwardChecking loses to Backtracking on n-queens
+
+**FIXED in 2e3efaa** — FC `power_rank` demoted 11 → 8 (below Backtracking).
+Real domain-pruning still TODO; comment in `pathos/algorithms/csp.py`
+documents the situation. README numbers refreshed.
+
+Original observation:
 
 | N  | Backtracking | ForwardChecking | nodes (both) |
 |---:|---:|---:|---:|

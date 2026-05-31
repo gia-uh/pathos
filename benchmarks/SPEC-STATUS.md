@@ -25,7 +25,7 @@ Format: ✓ in place · ◐ partial · ✗ missing · ⚠ spec/code disagree.
 | `.initial(state)` | ✓ | |
 | `.adversarial(players, maximizing_player)` | ✓ | |
 | `.parallel(workers)` | ⚠ | **Spec says "API reserved, not implemented" — but it IS implemented** (recent commits 83af022, ebbc4e5, f7a57ad, a0ea240, bdfd1f4). Spec is stale. |
-| `.timeout(seconds)` | ◐ | Stored on the Space (`_timeout`) and forwarded to `Solver.timeout`, but **never consumed by any algorithm**. No `solve()` consults `self.timeout`. Effectively a no-op. |
+| `.timeout(seconds)` | ✓ | **Fixed in 087059b**: Solver.solve wraps the algorithm run in a SIGALRM-based wall-clock guard; returns `SearchResult.not_found(...)` on expiry. Both `space.solver(timeout=N)` and `space.timeout(N).solver()` honour it. 4 regression tests in `tests/test_timeout.py`. |
 
 ## Decorator hooks
 
@@ -70,9 +70,11 @@ validation pass.
 ### CSP (spec: 4)
 - Backtracking ✓ · Forward Checking ⚠ (see FINDINGS 2a — doesn't actually
   prune) · Min-Conflicts ✓
-- **AC-3 ✗** — listed in spec, no class in registry. Note: AC-3 is a
-  preprocessing step, not a standalone solver — could ship as a utility
-  function rather than a registry algorithm.
+- **AC-3 ◐** — class `AC3` exists in `pathos/algorithms/csp.py` but is
+  not `@register`'d, so it's invisible to the auto-selector. Likely
+  intentional (AC-3 is preprocessing) but neither documented nor
+  exposed via the package API. Either expose explicitly or document
+  the rationale.
 
 ### Cross-family combos (spec lists 3)
 - `{evaluate} + {successors}` → Memetic GA, Iterated Local Search — **both ✗**
@@ -168,7 +170,8 @@ Parallel execution ⚠ — spec says reserved, code says shipped.
 required-but-unmodeled state shapes (hashable, continuous, CSP) cause
 the auto-selector to offer crashing algorithms.
 
-**Suggested next step:** either update the spec to match shipped reality
-(parallel, GraphSpace.evaluate), then ship the genuinely missing items
-in priority order (PSO, .timeout(), function validation, HC variants);
-OR pick the highest-leverage gap and close it before re-syncing the spec.
+**Status after 2026-05-30 session (commits 087059b, 2e3efaa, c4f0014, 3c5246c):**
+Spec sync ✓, FC rank demote ✓, 4 lattice-crash guards ✓, `.timeout()` wired ✓.
+Genuinely open: PSO, HC sub-variants, TourSpace 3-opt, function-signature
+validation in decorators, the deeper power_rank-vs-size question (2b, 2c),
+and reporting fixes for local-search `found=True` on puzzle8 (FINDINGS §3a).
