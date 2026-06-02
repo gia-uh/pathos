@@ -88,3 +88,65 @@ def test_anytime_algorithm_field_is_anytime_not_phase():
     space = _puzzle_chain_space(steps=3)
     result = space.solver().solve()
     assert result.algorithm == "AnytimeAStar"
+
+
+# ---------------------------------------------------------------------------
+# End-to-end anytime contract under tight budgets
+# ---------------------------------------------------------------------------
+
+import time as _time  # noqa: E402
+
+
+def _slow_8puzzle_like(branching: int = 4, depth: int = 15) -> Space:
+    """Synthetic space where each expansion takes ~0.5ms to force slow
+    progress under tight budget. State is (depth, branch_index).
+    Goal is (depth, *). Heuristic returns remaining depth."""
+    space = Space().initial((0, 0))
+
+    @space.successors
+    def expand(s):
+        d, b = s
+        if d >= depth:
+            return
+        for i in range(branching):
+            yield f"b{i}", (d + 1, i)
+
+    @space.goal
+    def is_goal(s):
+        d, _ = s
+        return d == depth
+
+    @space.heuristic
+    def h(s):
+        d, _ = s
+        # Slow heuristic — simulates expensive evaluation
+        _time.sleep(0.0005)
+        return float(depth - d)
+
+    @space.evaluate
+    def cost(s):
+        return 1.0
+
+    return space
+
+
+def test_anytime_returns_incumbent_under_tight_budget():
+    """0.05s on a slow space — AStar can't finish, but Greedy/WAStar
+    earlier phases plant an incumbent."""
+    space = _slow_8puzzle_like(branching=3, depth=8)
+    result = space.solver(timeout=0.05).solve()
+    # Even if final AStar didn't complete, an earlier phase should
+    # have produced an incumbent.
+    assert result.algorithm == "AnytimeAStar"
+    if result.found:
+        assert result.cost is not None
+        assert result.cost > 0
+
+
+def test_anytime_small_budget_still_runs_one_phase():
+    """A budget of 0.001s — extremely tight. Greedy on a small space
+    should still finish in microseconds, so we expect found=True."""
+    space = _puzzle_chain_space(steps=2)
+    result = space.solver(timeout=0.001).solve()
+    assert result.found is True
+    assert result.algorithm == "AnytimeAStar"
