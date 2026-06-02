@@ -1,17 +1,113 @@
 name: Publish to PyPI
+
 on:
   release:
     types: [published]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Build and validate only — do not publish to PyPI"
+        required: false
+        default: "true"
+        type: choice
+        options:
+          - "true"
+          - "false"
+
+# Don't allow concurrent publishes for the same release.
+concurrency:
+  group: pypi-publish-${{ github.event.release.tag_name || github.run_id }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
 jobs:
-  publish:
+  # Gate: must pass tests on the tagged commit before we publish anything.
+  test:
+    name: Test (Python ${{ matrix.python }})
     runs-on: ubuntu-latest
-    environment: pypi
-    permissions:
-      id-token: write
+    strategy:
+      fail-fast: true
+      matrix:
+        python: ["3.11", "3.12", "3.13"]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
-        with: { python-version: "3.11" }
-      - run: pip install build
-      - run: python -m build
-      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - run: pip install -e ".[dev]"
+      - run: pytest --tb=short --ignore=tests/test_examples.py
+      - run: python -m mypy --strict pathos/
+
+  build:
+    name: Build distribution
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install build + twine
+        run: pip install --upgrade build twine
+
+      - name: Confirm version matches release tag
+        if: github.event_name == 'release'
+        run: |
+          PYPROJECT_VERSION=$(python -c "import tomllib; print(tomllib.loads(open('pyproject.toml','rb').read())['project']['version'])")
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          echo "pyproject.toml version: $PYPROJECT_VERSION"
+          echo "release tag (sans 'v'): $TAG_VERSION"
+          if [ "$PYPROJECT_VERSION" != "$TAG_VERSION" ]; then
+            echo "::error::pyproject.toml version ($PYPROJECT_VERSION) does not match release tag ($TAG_VERSION)"
+            exit 1
+          fi
+
+      - name: Build sdist + wheel
+        run: python -m build
+
+      - name: Validate distribution metadata
+        run: twine check --strict dist/*
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+          retention-days: 7
+
+  publish:
+    name: Publish to PyPI (Trusted Publisher)
+    needs: build
+    # Only publish for real releases, not dry-run dispatch.
+    if: github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && inputs.dry_run == 'false')
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/project/pathos-ai/
+    permissions:
+      # OIDC token for PyPI Trusted Publishing — no API token in secrets.
+      id-token: write
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/
+          # Don't allow duplicate version uploads — if 0.1.0 is already on
+          # PyPI and someone re-tags, fail loudly rather than silently skip.
+          skip-existing: false
+          verbose: true

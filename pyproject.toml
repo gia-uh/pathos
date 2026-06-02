@@ -5,10 +5,52 @@ build-backend = "hatchling.build"
 [project]
 name = "pathos-ai"
 version = "0.1.0"
-description = "Production-ready classical AI search algorithms"
+description = "Production-ready classical AI search algorithms — declare your problem, the solver picks the algorithm. Includes an anytime A* cascade by default."
 readme = "README.md"
-license = { text = "MIT" }
+license = { file = "LICENSE" }
 requires-python = ">=3.11"
+authors = [
+    { name = "Alejandro Piad Morffis", email = "apiad@apiad.net" },
+]
+maintainers = [
+    { name = "Alejandro Piad Morffis", email = "apiad@apiad.net" },
+]
+keywords = [
+    "search",
+    "ai",
+    "a-star",
+    "anytime",
+    "heuristic",
+    "graph-search",
+    "csp",
+    "constraint-satisfaction",
+    "metaheuristics",
+    "genetic-algorithm",
+    "simulated-annealing",
+    "particle-swarm",
+    "minimax",
+    "mcts",
+    "planning",
+    "optimization",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Intended Audience :: Education",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: MacOS",
+    "Operating System :: POSIX",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Typing :: Typed",
+]
 dependencies = []
 
 [project.optional-dependencies]
@@ -21,9 +63,11 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/gia-uh/pathos"
-Documentation = "https://gia-uh.github.io/pathos"
+Homepage = "https://uhgia.org/pathos/"
+Documentation = "https://uhgia.org/pathos/"
 Repository = "https://github.com/gia-uh/pathos"
+Issues = "https://github.com/gia-uh/pathos/issues"
+Changelog = "https://github.com/gia-uh/pathos/releases"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
