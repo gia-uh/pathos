@@ -81,13 +81,29 @@ class Solver:
         if self.timeout is None:
             return cls(self.space).solve()
 
-        # Wall-clock guard via SIGALRM. Unix-only and main-thread-only;
-        # multiprocessing workers spawned by .parallel(n) are out of scope
-        # because solve() is the top-level entry, always on the main thread.
-        def _handler(signum, frame):  # type: ignore[no-untyped-def]
-            raise TimeoutError(f"solver timeout exceeded ({self.timeout}s)")
+        # Cooperative-cancel + watchdog backstop.
+        #
+        # On primary SIGALRM (ITIMER_REAL), set the cancel token.
+        # Cooperating algorithms check space._cancel_requested() and
+        # return best-so-far cleanly. WATCHDOG_GRACE seconds later, a
+        # follow-up SIGVTALRM (ITIMER_VIRTUAL) raises TimeoutError as a
+        # backstop for any algorithm that doesn't yet check the token
+        # (e.g. IDA*, CSP algorithms in v1).
+        WATCHDOG_GRACE = 2.0
 
-        prev_handler = signal.signal(signal.SIGALRM, _handler)
+        def _on_primary(signum, frame):  # type: ignore[no-untyped-def]
+            self.space._request_cancel()
+            signal.signal(signal.SIGVTALRM, _on_watchdog)
+            signal.setitimer(signal.ITIMER_VIRTUAL, WATCHDOG_GRACE)
+
+        def _on_watchdog(signum, frame):  # type: ignore[no-untyped-def]
+            raise TimeoutError(
+                f"solver timeout exceeded ({self.timeout}s) and "
+                f"cancel-token grace ({WATCHDOG_GRACE}s) lapsed",
+            )
+
+        prev_primary = signal.signal(signal.SIGALRM, _on_primary)
+        prev_secondary = signal.signal(signal.SIGVTALRM, signal.SIG_IGN)
         signal.setitimer(signal.ITIMER_REAL, self.timeout)
         t0 = time.perf_counter()
         try:
@@ -98,4 +114,9 @@ class Solver:
             )
         finally:
             signal.setitimer(signal.ITIMER_REAL, 0)
-            signal.signal(signal.SIGALRM, prev_handler)
+            signal.setitimer(signal.ITIMER_VIRTUAL, 0)
+            signal.signal(signal.SIGALRM, prev_primary)
+            signal.signal(signal.SIGVTALRM, prev_secondary)
+            # Reset cancel token for any future solver call on this space.
+            from pathos.core.cancel import CancelToken
+            self.space._cancel_token = CancelToken()
