@@ -1,4 +1,5 @@
 from __future__ import annotations
+import math
 import time
 from collections import deque
 from typing import Any
@@ -41,13 +42,15 @@ class BFS(Algorithm):
         t0 = time.perf_counter()
         initial = self.space._initial
         if self.space._goal(initial):
-            return SearchResult(initial, [], 0.0, "BFS", 0, 0.0, True)
+            return SearchResult(initial, [], 0.0, "BFS", 0, 0.0, True, epsilon=1.0)
 
         frontier: deque[tuple[Any, list[Any]]] = deque([(initial, [])])
         visited: set[Any] = {initial}
         expanded = 0
 
         while frontier:
+            if self.space._cancel_requested():
+                return SearchResult.not_found("BFS", expanded, time.perf_counter() - t0)
             state, path = frontier.popleft()
             expanded += 1
             for action, child in self.space._successors(state):
@@ -58,6 +61,7 @@ class BFS(Algorithm):
                     return SearchResult(
                         child, new_path, float(len(new_path)),
                         "BFS", expanded, time.perf_counter() - t0, True,
+                        epsilon=1.0,
                     )
                 visited.add(child)
                 frontier.append((child, new_path))
@@ -91,6 +95,8 @@ class DFS(Algorithm):
         expanded = 0
 
         while stack:
+            if self.space._cancel_requested():
+                return SearchResult.not_found("DFS", expanded, time.perf_counter() - t0)
             state, path = stack.pop()
             if state in visited:
                 continue
@@ -99,6 +105,7 @@ class DFS(Algorithm):
                 return SearchResult(
                     state, path, float(len(path)),
                     "DFS", expanded, time.perf_counter() - t0, True,
+                    epsilon=math.inf,
                 )
             expanded += 1
             for action, child in self.space._successors(state):
@@ -145,12 +152,15 @@ class IDDFS(Algorithm):
         initial = self.space._initial
         expanded = 0
         for depth in range(1000):
+            if self.space._cancel_requested():
+                return SearchResult.not_found("IDDFS", expanded, time.perf_counter() - t0)
             result = self._dls(initial, [], depth, set())
             if result is not None:
                 state, path = result
                 return SearchResult(
                     state, path, float(len(path)),
                     "IDDFS", expanded, time.perf_counter() - t0, True,
+                    epsilon=1.0,
                 )
             expanded += 1
         return SearchResult.not_found("IDDFS", expanded, time.perf_counter() - t0)
@@ -184,6 +194,8 @@ class UCS(Algorithm):
         expanded = 0
 
         while frontier:
+            if self.space._cancel_requested():
+                return SearchResult.not_found("UCS", expanded, time.perf_counter() - t0)
             cost, _, state, path = heapq.heappop(frontier)
             if state in visited and visited[state] <= cost:
                 continue
@@ -191,6 +203,7 @@ class UCS(Algorithm):
             if self.space._goal(state):
                 return SearchResult(
                     state, path, cost, "UCS", expanded, time.perf_counter() - t0, True,
+                    epsilon=1.0,
                 )
             expanded += 1
             for action, child in self.space._successors(state):

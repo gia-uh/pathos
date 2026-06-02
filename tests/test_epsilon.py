@@ -62,3 +62,67 @@ def test_not_found_has_epsilon_none():
     r = SearchResult.not_found("AStar", 0, 0.0)
     assert r.epsilon is None
     assert r.optimal is False
+
+
+# ---------------------------------------------------------------------------
+# Per-algorithm epsilon emission — path-search family
+# ---------------------------------------------------------------------------
+
+import pathos.algorithms  # noqa: F401, E402
+from pathos import Space  # noqa: E402
+
+
+def _trivial_unit_cost_chain() -> Space:
+    space = Space().initial("a")
+
+    @space.successors
+    def expand(s):
+        if s == "a":
+            yield "go_b", "b"
+        elif s == "b":
+            yield "go_c", "c"
+
+    @space.goal
+    def is_goal(s):
+        return s == "c"
+
+    @space.evaluate
+    def cost(s):
+        return 1.0
+
+    return space
+
+
+def test_bfs_emits_epsilon_one_on_success():
+    from pathos.algorithms.uninformed import BFS
+    space = _trivial_unit_cost_chain()
+    r = BFS(space).solve()
+    assert r.found is True
+    assert r.epsilon == 1.0
+    assert r.optimal is True
+
+
+def test_ucs_emits_epsilon_one_on_success():
+    from pathos.algorithms.uninformed import UCS
+    space = _trivial_unit_cost_chain()
+    r = UCS(space).solve()
+    assert r.found is True
+    assert r.epsilon == 1.0
+
+
+def test_iddfs_emits_epsilon_one_on_success():
+    from pathos.algorithms.uninformed import IDDFS
+    space = _trivial_unit_cost_chain()
+    r = IDDFS(space).solve()
+    assert r.found is True
+    assert r.epsilon == 1.0
+
+
+def test_dfs_emits_epsilon_inf_on_success():
+    """DFS is non-optimal — see FINDINGS §3b. epsilon=inf is the
+    correct quality bound."""
+    from pathos.algorithms.uninformed import DFS
+    space = _trivial_unit_cost_chain()
+    r = DFS(space).solve()
+    assert r.found is True
+    assert r.epsilon == math.inf
