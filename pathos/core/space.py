@@ -7,8 +7,8 @@ if TYPE_CHECKING:
     from pathos.core.solver import Solver
 
 
-Optimality = Literal["exact", "approximate"]
-_VALID_OPTIMALITY: frozenset[str] = frozenset({"exact", "approximate"})
+Mode = Literal["exact", "approximate", "auto"]
+_VALID_MODES: frozenset[str] = frozenset({"exact", "approximate", "auto"})
 
 
 class Space:
@@ -31,7 +31,7 @@ class Space:
         self._initial_value: Any = None
         self._initial_factory: Callable[[], Any] | None = None
         self._timeout: float | None = None
-        self._optimality: Optimality = "exact"
+        self._mode: Mode = "exact"
         self._cancel_token: CancelToken = CancelToken()
         self._n_workers: int = 1
         self._adversarial: bool = False
@@ -68,26 +68,24 @@ class Space:
         self._timeout = seconds
         return self
 
-    def optimality(self, mode: Optimality) -> Space:
-        """Declare optimality preference for the auto-solver.
+    def mode(self, mode: Mode) -> Space:
+        """Declare the selection mode for the auto-solver.
 
-        - "exact" (default): prefer admissible algorithms that guarantee
-          the optimal solution (e.g. A*, IDA*, BFS, UCS).
-        - "approximate": prefer bounded-suboptimal variants that trade
-          a small quality bound for speed (e.g. WeightedA*). Useful when
-          A*'s admissibility bill is too expensive and an ε-optimal
-          answer is acceptable.
+        - "exact" (current default — flips to "auto" once AnytimeAStar
+          is registered): admissible algorithms preferred.
+        - "approximate": bounded-suboptimal A* variants outrank exact
+          ones — useful when A*'s admissibility bill is too expensive.
+        - "auto": cascade meta-algorithm wins selection (anytime
+          delivery: best incumbent at any point in time).
 
         Mirrors the .timeout() pattern: the value is read by
-        Algorithm.score_for(space) at selection time, so any
-        capability-compatible algorithm can consult it.
+        Algorithm.score_for(space) at selection time.
         """
-        if mode not in _VALID_OPTIMALITY:
+        if mode not in _VALID_MODES:
             raise ValueError(
-                f"optimality must be one of {sorted(_VALID_OPTIMALITY)}, "
-                f"got {mode!r}"
+                f"mode must be one of {sorted(_VALID_MODES)}, got {mode!r}"
             )
-        self._optimality = mode
+        self._mode = mode
         return self
 
     def parallel(self, workers: int) -> Space:
@@ -152,17 +150,16 @@ class Space:
         self,
         candidates: list[Any] | None = None,
         timeout: float | None = None,
-        optimality: Optimality | None = None,
+        mode: Mode | None = None,
     ) -> "Solver":
         from pathos.core.solver import Solver
-        if optimality is not None and optimality not in _VALID_OPTIMALITY:
+        if mode is not None and mode not in _VALID_MODES:
             raise ValueError(
-                f"optimality must be one of {sorted(_VALID_OPTIMALITY)}, "
-                f"got {optimality!r}"
+                f"mode must be one of {sorted(_VALID_MODES)}, got {mode!r}"
             )
         return Solver(
             self,
             candidates=candidates,
             timeout=timeout or self._timeout,
-            optimality=optimality,
+            mode=mode,
         )

@@ -7,7 +7,7 @@ from pathos.core.capabilities import Capability
 from pathos.core.result import SearchResult
 
 if TYPE_CHECKING:
-    from pathos.core.space import Space, Optimality
+    from pathos.core.space import Space, Mode
     from pathos.algorithms.base import Algorithm
 
 
@@ -25,14 +25,14 @@ class Solver:
         space: Space,
         candidates: list[type[Algorithm]] | None = None,
         timeout: float | None = None,
-        optimality: Optimality | None = None,
+        mode: Mode | None = None,
     ) -> None:
         self.space = space
         self.candidates = candidates
         self.timeout = timeout
         # `None` means "inherit from space"; an explicit value overrides
         # the space's setting for this solver call only (mirrors timeout).
-        self.optimality: Optimality | None = optimality
+        self.mode: Mode | None = mode
 
     def _select(self) -> type[Algorithm]:
         pool = self.candidates if self.candidates is not None else _REGISTRY
@@ -53,14 +53,14 @@ class Solver:
             ]
             if goal_honoring:
                 compatible = goal_honoring
-        # Per-solver optimality overrides the space setting for this call.
-        prev_opt = self.space._optimality
-        if self.optimality is not None and self.optimality != prev_opt:
-            self.space._optimality = self.optimality
+        # Per-solver mode overrides the space setting for this call.
+        prev_mode = self.space._mode
+        if self.mode is not None and self.mode != prev_mode:
+            self.space._mode = self.mode
             try:
                 best = max(compatible, key=lambda cls: cls.score_for(self.space))
             finally:
-                self.space._optimality = prev_opt
+                self.space._mode = prev_mode
         else:
             best = max(compatible, key=lambda cls: cls.score_for(self.space))
         # warn about unused capabilities

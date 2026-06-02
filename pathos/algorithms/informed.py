@@ -30,7 +30,7 @@ class AStar(Algorithm):
     def score_for(cls, space: Any) -> float:
         # Admissible: the user explicitly asking for "approximate" wants
         # speed, so cede to bounded-suboptimal siblings.
-        if space._optimality == "approximate":
+        if space._mode == "approximate":
             return float(cls.power_rank) - 10.0
         return float(cls.power_rank)
 
@@ -82,7 +82,7 @@ class GreedyBestFirst(Algorithm):
         # Unbounded suboptimal: gets a small bump in approximate mode so
         # it can outrank demoted-A*, but stays below WeightedA*'s bump
         # because no quality bound is provided.
-        if space._optimality == "approximate":
+        if space._mode == "approximate":
             return float(cls.power_rank) + 5.0
         return float(cls.power_rank)
 
@@ -134,7 +134,7 @@ class WeightedAStar(Algorithm):
     def score_for(cls, space: Any) -> float:
         # ε-bounded suboptimal: the explicit target of `optimality="approximate"`.
         # Bump above admissible A* / IDA* / Bidirectional in approximate mode.
-        if space._optimality == "approximate":
+        if space._mode == "approximate":
             return float(cls.power_rank) + 10.0
         return float(cls.power_rank)
 
@@ -189,7 +189,7 @@ class IDAstar(Algorithm):
     @classmethod
     def score_for(cls, space: Any) -> float:
         # Admissible: same demote as A* in approximate mode.
-        if space._optimality == "approximate":
+        if space._mode == "approximate":
             return float(cls.power_rank) - 10.0
         return float(cls.power_rank)
 
@@ -251,7 +251,7 @@ class BidirectionalAStar(Algorithm):
     @classmethod
     def score_for(cls, space: Any) -> float:
         # Admissible: demote in approximate mode just like A* / IDA*.
-        if space._optimality == "approximate":
+        if space._mode == "approximate":
             return float(cls.power_rank) - 10.0
         return float(cls.power_rank)
 
