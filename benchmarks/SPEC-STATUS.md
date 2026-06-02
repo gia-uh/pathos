@@ -144,6 +144,7 @@ Spec fields and actual `@dataclass SearchResult` fields are identical:
 | Auto-solver with power-rank selection | ✓ — context-aware `score_for(space)` + `mode` knob; FINDINGS §2 fully closed |
 | Anytime cascade meta-algorithm for A*-family | ✓ — `AnytimeAStar` registered; 6-phase cascade with cancel-token cooperation |
 | Anytime cascade meta-algorithm for CSP-family | ✓ — `AnytimeCSP` registered; `[MinConflicts (if EVALUATE), Backtracking]` cascade |
+| Anytime cascade meta-algorithm for local-search family | ✓ — `AnytimeLocal` registered; `[HillClimbing, SimulatedAnnealing, TabuSearch]` cascade |
 | Cancel-token primitive | ✓ — `pathos/core/cancel.py`; checked by 10 algorithms in v1 |
 | SearchResult.epsilon | ✓ — admissible algorithms emit 1.0, WeightedAStar emits weight, Greedy emits inf |
 | `SearchResult` uniform return type | ✓ |
@@ -199,7 +200,18 @@ CSP-shaped space (initial state is a dict). Cascade is
 Algorithm base gained an `optional` class attr so meta-algorithms can
 declare capabilities they consume dynamically — Solver treats
 `requires | optional` as "used" for the unused-capability warning. Tests
-at `tests/test_anytime_csp.py` (9). Genuinely open work:
-AnytimeLocal/AnytimeAdversarial meta-algorithms (spec sketches),
-per-phase budget enforcement, IDA* cancel-token integration (recursive
-shape).
+at `tests/test_anytime_csp.py` (9).
+
+**Status after 2026-06-02 AnytimeLocal ship.** Cascade pattern extended
+to the local-search family: `AnytimeLocal` wins selection under
+`mode="auto"` for any pure-optimization space (`{SUCCESSORS, EVALUATE}`,
+no GOAL). Cascade is `[HillClimbing (max_restarts=3),
+SimulatedAnnealing (max_iter=500), TabuSearch (max_iter=200,
+tabu_size=20)]` — fast-probe followed by escape phases. Lower-cost
+incumbent wins across phases (AnytimeAStar's `_is_better` rule, not
+AnytimeCSP's first-found exit). `AnytimeLocal.requires` omits GOAL so
+the goal-honoring filter in `Solver._select` cedes goal-bearing spaces
+to `AnytimeAStar` / uninformed algorithms. Tests at
+`tests/test_anytime_local.py` (9). Genuinely open work:
+AnytimeAdversarial meta-algorithm (spec sketch), per-phase budget
+enforcement, IDA* cancel-token integration (recursive shape).

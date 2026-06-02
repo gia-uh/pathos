@@ -1,4 +1,6 @@
 from __future__ import annotations
+import dataclasses
+import math
 import time
 import random
 from typing import Any
@@ -181,3 +183,87 @@ class LocalBeamSearch(Algorithm):
             best, None, best_cost, "LocalBeamSearch",
             expanded, time.perf_counter() - t0, self._goal_reached(best),
         )
+
+
+@register
+class AnytimeLocal(Algorithm):
+    """Anytime Local Search — meta-algorithm that delivers best-effort
+    under a wall-clock budget for pure-optimization spaces.
+
+    Runs a cascade `[HillClimbing, SimulatedAnnealing, TabuSearch]`:
+    HillClimbing is a cheap fast-probe (greedy descent, gets stuck in
+    local optima); SimulatedAnnealing and TabuSearch are escape phases
+    that explore around the incumbent. The best (lowest-cost) result
+    across all phases is returned — UNLIKE AnytimeCSP, lower-cost
+    semantics is meaningful for local search, so the AnytimeAStar
+    incumbent rule applies.
+
+    Wins auto-selection only when `space._mode == "auto"` — score_for
+    returns -inf otherwise so users explicitly opting into "exact" or
+    "approximate" keep the base-algorithm pick.
+
+    Requires only the intersection of HC/SA/Tabu: SUCCESSORS+EVALUATE.
+    Does NOT declare GOAL, so on goal-bearing spaces the goal-honoring
+    filter in `Solver._select` keeps AnytimeLocal out — letting
+    AnytimeAStar (with HEURISTIC) or uninformed goal algorithms win
+    instead. This is intentional: pure-optimization is AnytimeLocal's
+    lane.
+    """
+
+    requires = frozenset({Capability.SUCCESSORS, Capability.EVALUATE})
+    power_rank = 0  # irrelevant — score_for short-circuits
+
+    # Populated immediately below this class definition.
+    SCHEDULE: list[tuple[type[Algorithm], dict[str, Any]]] = []
+
+    @classmethod
+    def score_for(cls, space: Any) -> float:
+        if space._mode == "auto":
+            return 1000.0
+        return -math.inf
+
+    def solve(self) -> SearchResult:
+        t0 = time.perf_counter()
+        best: SearchResult | None = None
+        for alg_cls, kwargs in self.SCHEDULE:
+            if self.space._cancel_requested():
+                break
+            phase_result = alg_cls(self.space, **kwargs).solve()
+            if self._is_better(phase_result, best):
+                best = phase_result
+        if best is None:
+            return SearchResult.not_found(
+                "AnytimeLocal", 0, time.perf_counter() - t0,
+            )
+        return dataclasses.replace(
+            best,
+            algorithm="AnytimeLocal",
+            elapsed=time.perf_counter() - t0,
+        )
+
+    @staticmethod
+    def _is_better(candidate: SearchResult, best: SearchResult | None) -> bool:
+        """Incumbent comparison: lower cost wins. Mirrors AnytimeAStar.
+
+        - A `found=False` candidate never displaces anything.
+        - If `best` is None and candidate is found, candidate wins.
+        - Otherwise lower cost wins; `None` and `inf` treated as worst.
+        """
+        if not candidate.found:
+            return False
+        if best is None:
+            return True
+        c_cost = candidate.cost if candidate.cost is not None else math.inf
+        b_cost = best.cost if best.cost is not None else math.inf
+        return c_cost < b_cost
+
+
+# Cascade body populated at import time after SimulatedAnnealing is in
+# scope (cross-module — see pathos/algorithms/__init__.py).
+from pathos.algorithms.evolutionary import SimulatedAnnealing  # noqa: E402
+
+AnytimeLocal.SCHEDULE = [
+    (HillClimbing, {"max_restarts": 3}),
+    (SimulatedAnnealing, {"max_iter": 500, "T0": 100.0, "cooling": 0.99}),
+    (TabuSearch, {"max_iter": 200, "tabu_size": 20}),
+]

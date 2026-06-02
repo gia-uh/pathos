@@ -62,11 +62,14 @@ def test_score_for_default_equals_power_rank():
 def test_hill_climbing_bumps_above_tabu_on_tsp():
     """HC at default rank 15 < TS rank 18 — yet on TSP HC matches or beats
     TS on quality and is 4-5× faster. HC.score_for bumps to 20 when the
-    space is pure-optimization (no GOAL) and state is list/tuple."""
+    space is pure-optimization (no GOAL) and state is list/tuple.
+
+    Default mode is "auto" → AnytimeLocal wins. Pin mode="exact" to verify
+    the base HC pick is still selection-correct."""
     space = _tsp()
     assert HillClimbing.score_for(space) > TabuSearch.score_for(space)
     # Confirm the auto-pick lands on HC, not TS.
-    assert space.solver()._select() is HillClimbing
+    assert space.solver(mode="exact")._select() is HillClimbing
 
 
 def test_hill_climbing_does_not_bump_on_string_state():

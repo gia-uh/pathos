@@ -46,7 +46,7 @@ pip install pathos-ai
 |---------|---------------------|
 | `@evaluate` | Simulated Annealing, Genetic Algorithm, DE, PSO |
 | `@successors + @goal` | BFS, DFS, IDDFS *(DFS is non-optimal — for shortest paths prefer BFS/UCS)* |
-| `@successors + @evaluate` | Hill Climbing, Tabu Search |
+| `@successors + @evaluate` | Hill Climbing, Tabu Search, Simulated Annealing — cascaded by `AnytimeLocal` under `mode="auto"` |
 | `@successors + @goal + @heuristic` | A*, IDA*, Greedy Best-First |
 | `@successors + @goal + @heuristic + @evaluate` | Weighted A*, UCS |
 | `.adversarial() + @terminal + @utility` | Minimax, Alpha-Beta, MCTS |
@@ -101,6 +101,15 @@ and runs a cascade `[MinConflicts, Backtracking]` — MinConflicts is only
 included when `@evaluate` is declared (it greedily picks the lowest-
 violation child). The first phase that returns a consistent complete
 assignment wins; if MinConflicts gives up, Backtracking takes over.
+
+On pure-optimization spaces (`@successors + @evaluate`, no `@goal`),
+`AnytimeLocal` wins selection under `mode="auto"` and runs a cascade
+`[HillClimbing, SimulatedAnnealing, TabuSearch]` — a fast-probe followed
+by two escape phases. The best (lowest-cost) incumbent across all phases
+is returned; cancellation mid-cascade keeps whichever incumbent was
+already planted. `AnytimeLocal` does not declare `@goal`, so on
+goal-bearing spaces the selector keeps `AnytimeAStar` (with `@heuristic`)
+or the uninformed goal algorithms in charge.
 
 `SearchResult.epsilon` tells you the quality bound: `1.0` is proven
 optimal, `>1.0` is ε-bounded (cost ≤ ε × optimal), `inf` is unbounded

@@ -56,7 +56,11 @@ def test_pure_optimization_still_picks_local_search():
     on vector-state pure-optimization problems — see FINDINGS §2b and
     `HillClimbing.score_for`. The point of this test is that the auto-
     pick stays inside the local-search family, not which specific
-    member wins."""
+    member wins.
+
+    Default mode is "auto" → AnytimeLocal wins. Pin mode="exact" to verify
+    the base HC pick is still selection-correct (same shape as
+    test_8puzzle_still_picks_astar)."""
     from pathos.algorithms.local import HillClimbing
     cities = list(range(5))
     distances = {(i, j): 1.0 for i in cities for j in cities if i != j}
@@ -66,7 +70,7 @@ def test_pure_optimization_still_picks_local_search():
     def cost(tour):
         return 1.0
 
-    picked = space.solver()._select()
+    picked = space.solver(mode="exact")._select()
     assert picked is HillClimbing
 
 
@@ -142,5 +146,7 @@ def test_falls_back_to_full_pool_when_no_goal_honoring_compatible():
         return float(sum(s))
 
     # Should not raise — falls through to goal-ignoring local search.
-    picked = space.solver()._select()
+    # Default mode is "auto" → AnytimeLocal wins. Pin mode="exact" to
+    # verify the base goal-ignoring local-search pick is correct.
+    picked = space.solver(mode="exact")._select()
     assert picked in GOAL_IGNORING
