@@ -52,10 +52,14 @@ class HillClimbing(Algorithm):
         expanded = 0
 
         for _ in range(self.max_restarts):
+            if self.space._cancel_requested():
+                break
             state = self.space._initial
             cost = self.space._evaluate(state)
             sideways = 0
             while True:
+                if self.space._cancel_requested():
+                    break
                 neighbors = list(self.space._successors(state))
                 expanded += 1
                 if not neighbors:
