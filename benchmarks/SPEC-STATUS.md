@@ -26,6 +26,7 @@ Format: ✓ in place · ◐ partial · ✗ missing · ⚠ spec/code disagree.
 | `.adversarial(players, maximizing_player)` | ✓ | |
 | `.parallel(workers)` | ⚠ | **Spec says "API reserved, not implemented" — but it IS implemented** (recent commits 83af022, ebbc4e5, f7a57ad, a0ea240, bdfd1f4). Spec is stale. |
 | `.timeout(seconds)` | ✓ | **Fixed in 087059b**: Solver.solve wraps the algorithm run in a SIGALRM-based wall-clock guard; returns `SearchResult.not_found(...)` on expiry. Both `space.solver(timeout=N)` and `space.timeout(N).solver()` honour it. 4 regression tests in `tests/test_timeout.py`. |
+| `.optimality(mode)` | ✓ | **New — closes FINDINGS §2c.** Two modes: `"exact"` (default, admissible algorithms preferred) and `"approximate"` (bounded-suboptimal A\* variants outrank exact). Honoured via `score_for(space)` overrides on `AStar`, `IDAstar`, `BidirectionalAStar`, `WeightedAStar`, `GreedyBestFirst`. Both `space.optimality("approximate")` and `space.solver(optimality="approximate")` work; the kwarg is per-call and does not mutate space state. 13 regression tests in `tests/test_optimality.py`. |
 
 ## Decorator hooks
 
@@ -139,7 +140,7 @@ Spec fields and actual `@dataclass SearchResult` fields are identical:
 |---|:---:|
 | All algorithm families pure Python | ◐ — PSO and AC-3 absent; HC sub-variants absent; cross-family combos absent |
 | `Space`, `GraphSpace`, `CSPSpace`, `TourSpace`, `GameSpace` | ✓ |
-| Auto-solver with power-rank selection | ✓ (but several mis-ranks — see FINDINGS §2) |
+| Auto-solver with power-rank selection | ✓ — context-aware `score_for(space)` + `optimality` knob; FINDINGS §2 fully closed |
 | `SearchResult` uniform return type | ✓ |
 | Warning system for unused capabilities | ✓ — `Solver._select` emits `UserWarning` when capabilities are unused |
 | Type stubs for mypy/pyright compatibility | ✓ — entire codebase is `mypy --strict` clean (commit 9ab0bc8) |
@@ -152,13 +153,13 @@ Parallel execution ⚠ — spec says reserved, code says shipped.
 ## Summary
 
 **True gaps (planned, not implemented):**
-1. PSO algorithm
+1. ~~PSO algorithm~~ ✓ commit 52f4e51
 2. AC-3 algorithm (or as preprocessing utility)
 3. Memetic GA, Iterated Local Search, WalkSAT (cross-family combos)
 4. Hill Climbing steepest/stochastic sub-variants
 5. TourSpace 3-opt neighborhood
 6. Function-signature validation in decorators
-7. `.timeout()` actually being respected by algorithms
+7. ~~`.timeout()` actually being respected by algorithms~~ ✓ commit 087059b
 8. `backends/` directory (or remove from spec until v1.1)
 
 **Spec is stale (code is ahead):**
@@ -172,6 +173,10 @@ the auto-selector to offer crashing algorithms.
 
 **Status after 2026-05-30 session (commits 087059b, 2e3efaa, c4f0014, 3c5246c):**
 Spec sync ✓, FC rank demote ✓, 4 lattice-crash guards ✓, `.timeout()` wired ✓.
-Genuinely open: PSO, HC sub-variants, TourSpace 3-opt, function-signature
-validation in decorators, the deeper power_rank-vs-size question (2b, 2c),
-and reporting fixes for local-search `found=True` on puzzle8 (FINDINGS §3a).
+
+**Status after 2026-06-02 session — benchmark audit fully green.**
+§2c closed by the `optimality` knob (this commit). All FINDINGS items now
+either FIXED or explicitly out-of-scope. Genuinely open work has shifted to
+new spec items: HC sub-variants, TourSpace 3-opt, AC-3 exposure decision,
+cross-family combos (Memetic GA, ILS, WalkSAT), function-signature
+validation in decorators, and the MCTS heuristic-cutoff variant.

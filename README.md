@@ -70,6 +70,31 @@ tour = TourSpace(nodes=cities, distances=dist_matrix)
 game = GameSpace().initial(board)
 ```
 
+## Optimality preference
+
+When multiple goal-bearing algorithms are compatible (e.g. A\*, Weighted A\*,
+Greedy Best-First on `@successors + @goal + @heuristic + @evaluate`), the
+default auto-pick is **admissible** — it prefers the algorithm that
+guarantees the optimal solution. Opt in to bounded-suboptimal alternatives
+when speed matters more than the last few percent of optimality:
+
+```python
+# Default: A* wins (admissible, optimal)
+space.solver().solve()
+
+# Bounded-suboptimal A* variants outrank exact ones — Weighted A* wins,
+# typically 2-10× faster, costs within ε of optimal.
+space.optimality("approximate").solver().solve()
+
+# Per-call kwarg (does not mutate space):
+space.solver(optimality="approximate").solve()
+```
+
+Two modes: `"exact"` (default) and `"approximate"`. The preference is
+honoured by `Algorithm.score_for(space)` — admissible algorithms demote in
+approximate mode; `WeightedAStar` outranks them; `GreedyBestFirst` gets a
+smaller bump (no quality bound). Explicit `candidates=[…]` always wins.
+
 ## Parallel Evaluation
 
 Population-based algorithms (GA, DE, LocalBeamSearch) support multiprocessing via `.parallel(n)`:

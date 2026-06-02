@@ -26,6 +26,14 @@ class AStar(Algorithm):
                           Capability.HEURISTIC, Capability.EVALUATE})
     power_rank = 30
 
+    @classmethod
+    def score_for(cls, space: Any) -> float:
+        # Admissible: the user explicitly asking for "approximate" wants
+        # speed, so cede to bounded-suboptimal siblings.
+        if space._optimality == "approximate":
+            return float(cls.power_rank) - 10.0
+        return float(cls.power_rank)
+
     def solve(self) -> SearchResult:
         t0 = time.perf_counter()
         initial = self.space._initial
@@ -68,6 +76,15 @@ class GreedyBestFirst(Algorithm):
 
     requires = frozenset({Capability.SUCCESSORS, Capability.GOAL, Capability.HEURISTIC})
     power_rank = 20
+
+    @classmethod
+    def score_for(cls, space: Any) -> float:
+        # Unbounded suboptimal: gets a small bump in approximate mode so
+        # it can outrank demoted-A*, but stays below WeightedA*'s bump
+        # because no quality bound is provided.
+        if space._optimality == "approximate":
+            return float(cls.power_rank) + 5.0
+        return float(cls.power_rank)
 
     def solve(self) -> SearchResult:
         t0 = time.perf_counter()
@@ -112,6 +129,14 @@ class WeightedAStar(Algorithm):
     requires = frozenset({Capability.SUCCESSORS, Capability.GOAL,
                           Capability.HEURISTIC, Capability.EVALUATE})
     power_rank = 28
+
+    @classmethod
+    def score_for(cls, space: Any) -> float:
+        # ε-bounded suboptimal: the explicit target of `optimality="approximate"`.
+        # Bump above admissible A* / IDA* / Bidirectional in approximate mode.
+        if space._optimality == "approximate":
+            return float(cls.power_rank) + 10.0
+        return float(cls.power_rank)
 
     def __init__(self, space: Any, weight: float = 2.0) -> None:
         super().__init__(space)
@@ -160,6 +185,13 @@ class IDAstar(Algorithm):
     requires = frozenset({Capability.SUCCESSORS, Capability.GOAL,
                           Capability.HEURISTIC, Capability.EVALUATE})
     power_rank = 25
+
+    @classmethod
+    def score_for(cls, space: Any) -> float:
+        # Admissible: same demote as A* in approximate mode.
+        if space._optimality == "approximate":
+            return float(cls.power_rank) - 10.0
+        return float(cls.power_rank)
 
     def _search(self, path: list[Any], g: float, bound: float) -> tuple[float | str, list[Any] | None]:
         state = path[-1]
@@ -215,6 +247,13 @@ class BidirectionalAStar(Algorithm):
                           Capability.HEURISTIC, Capability.EVALUATE,
                           Capability.REVERSE_SUCCESSORS})
     power_rank = 35
+
+    @classmethod
+    def score_for(cls, space: Any) -> float:
+        # Admissible: demote in approximate mode just like A* / IDA*.
+        if space._optimality == "approximate":
+            return float(cls.power_rank) - 10.0
+        return float(cls.power_rank)
 
     def solve(self) -> SearchResult:
         t0 = time.perf_counter()

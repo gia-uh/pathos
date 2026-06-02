@@ -1,13 +1,12 @@
 # Benchmark findings
 
-**Status update (through commit 89de86b):**
-§1a–d, §2a, §2b (now FULLY closed — HC.score_for bumps over TS on TSP),
-§3a, §3b (README caveat) all FIXED. `.timeout()` wired. GA-on-TSP default
+**Status update (through this commit):**
+§1a–d, §2a, §2b, §2c (now FULLY closed — see below), §3a, §3b
+(README caveat) all FIXED. `.timeout()` wired. GA-on-TSP default
 operators fixed (commit ddd85dd) and GA auto-pick demoted on pure-{evaluate}
 spaces (commit 89de86b) so DE/PSO win on continuous optimization.
 Selector now uses context-aware `score_for(space)` instead of static
-`power_rank`. Remaining open: §2c (A\* vs WeightedAStar — needs a
-solver mode for "ε-optimal is fine, give me speed").
+`power_rank`. **The benchmark-driven audit is fully green.**
 
 Bugs and surprises surfaced by `python -m benchmarks.bench --all-algorithms`.
 Numbers below come from a 3-repeat run on Intel i7-6820HQ @ 2.70 GHz, Python
@@ -145,19 +144,30 @@ the space.
 
 ### 2c. AStar picked over WeightedAStar / GreedyBestFirst on 8-puzzle
 
-| scramble | AStar time | WAStar time | Greedy time | AStar cost | WAStar cost | Greedy cost |
-|---:|---:|---:|---:|---:|---:|---:|
-| 20 | 0.0042 | 0.0016 | 0.0020 | 20 | 20 | 46 |
-| 30 | 0.0136 | 0.0041 | 0.0025 | 24 | 24 | 46 |
-| 40 | 0.0171 | 0.0053 | 0.0035 | 26 | 30 | 44 |
-| 50 | 0.0098 | 0.0092 | 0.0030 | 22 | 28 | 62 |
+**FIXED — new `optimality` knob on Space/Solver.** The auto-pick was correct
+under the implicit "exact" contract; the missing axis is now first-class:
 
-WeightedAStar matches A\*'s optimal cost at scramble=20,30 at 2-3× the speed.
-Greedy is faster still but trades quality. A\* keeps the rank because it's
-admissible — fine if optimality matters, but the auto-pick currently has no
-way for users to say "ε-optimal is fine, give me speed."
+```python
+space.solver()                            # exact (default) — picks AStar
+space.optimality("approximate").solver()  # picks WeightedAStar
+space.solver(optimality="approximate")    # same, per-call kwarg
+```
 
-Not a bug; a missing axis. Worth documenting.
+Two modes: `"exact"` (default, behaviour unchanged) and `"approximate"`
+(bias toward bounded-suboptimal A\* variants). Admissible algorithms
+(`AStar`, `IDAstar`, `BidirectionalAStar`) demote by 10 in approximate;
+`WeightedAStar` bumps by 10 (ε-bounded); `GreedyBestFirst` bumps by 5
+(unbounded — still below WAStar in approximate). 13 regression tests in
+`tests/test_optimality.py`. Cost-vs-speed evidence on puzzle8 after the fix:
+
+| scramble | exact pick / time / cost | approx pick / time / cost | speedup |
+|---:|:---|:---|---:|
+| 20 | AStar /  2.0ms / 20 | WeightedAStar /  1.4ms / 26 | 1.4× |
+| 30 | AStar / 96.2ms / 28 | WeightedAStar / 10.0ms / 28 | 9.6× |
+| 40 | AStar / 27.7ms / 26 | WeightedAStar /  7.2ms / 30 | 3.8× |
+
+(Single run, seed 42, Python 3.13 zion.) Cost matches A\* at scramble 30,
+within +15-30% elsewhere — the canonical ε-optimal trade.
 
 ---
 

@@ -1,9 +1,13 @@
 from __future__ import annotations
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Any, Callable, Literal
 from pathos.core.capabilities import Capability
 
 if TYPE_CHECKING:
     from pathos.core.solver import Solver
+
+
+Optimality = Literal["exact", "approximate"]
+_VALID_OPTIMALITY: frozenset[str] = frozenset({"exact", "approximate"})
 
 
 class Space:
@@ -26,6 +30,7 @@ class Space:
         self._initial_value: Any = None
         self._initial_factory: Callable[[], Any] | None = None
         self._timeout: float | None = None
+        self._optimality: Optimality = "exact"
         self._n_workers: int = 1
         self._adversarial: bool = False
         self._players: int = 2
@@ -59,6 +64,28 @@ class Space:
 
     def timeout(self, seconds: float) -> Space:
         self._timeout = seconds
+        return self
+
+    def optimality(self, mode: Optimality) -> Space:
+        """Declare optimality preference for the auto-solver.
+
+        - "exact" (default): prefer admissible algorithms that guarantee
+          the optimal solution (e.g. A*, IDA*, BFS, UCS).
+        - "approximate": prefer bounded-suboptimal variants that trade
+          a small quality bound for speed (e.g. WeightedA*). Useful when
+          A*'s admissibility bill is too expensive and an ε-optimal
+          answer is acceptable.
+
+        Mirrors the .timeout() pattern: the value is read by
+        Algorithm.score_for(space) at selection time, so any
+        capability-compatible algorithm can consult it.
+        """
+        if mode not in _VALID_OPTIMALITY:
+            raise ValueError(
+                f"optimality must be one of {sorted(_VALID_OPTIMALITY)}, "
+                f"got {mode!r}"
+            )
+        self._optimality = mode
         return self
 
     def parallel(self, workers: int) -> Space:
@@ -115,6 +142,17 @@ class Space:
         self,
         candidates: list[Any] | None = None,
         timeout: float | None = None,
+        optimality: Optimality | None = None,
     ) -> "Solver":
         from pathos.core.solver import Solver
-        return Solver(self, candidates=candidates, timeout=timeout or self._timeout)
+        if optimality is not None and optimality not in _VALID_OPTIMALITY:
+            raise ValueError(
+                f"optimality must be one of {sorted(_VALID_OPTIMALITY)}, "
+                f"got {optimality!r}"
+            )
+        return Solver(
+            self,
+            candidates=candidates,
+            timeout=timeout or self._timeout,
+            optimality=optimality,
+        )
