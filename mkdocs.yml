@@ -1,41 +1,145 @@
 site_name: PATHOS
-site_description: Production-ready classical AI search algorithms
-site_url: https://gia-uh.github.io/pathos
+site_description: Production-ready classical AI search algorithms for Python — no machine learning, pure search.
+site_author: gia-uh
+site_url: https://gia-uh.github.io/pathos/
 repo_url: https://github.com/gia-uh/pathos
 repo_name: gia-uh/pathos
+edit_uri: edit/main/docs/
+copyright: Copyright &copy; 2026 gia-uh — MIT License
 
 theme:
   name: material
+  language: en
+  icon:
+    repo: fontawesome/brands/github
+    logo: material/graph-outline
   palette:
-    primary: deep purple
-    accent: amber
+    # Auto (system) preference
+    - media: "(prefers-color-scheme)"
+      toggle:
+        icon: material/brightness-auto
+        name: Switch to light mode
+    # Light
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: deep purple
+      accent: amber
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    # Dark
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: deep purple
+      accent: amber
+      toggle:
+        icon: material/brightness-4
+        name: Switch to auto mode
   features:
     - navigation.tabs
+    - navigation.tabs.sticky
     - navigation.sections
+    - navigation.indexes
+    - navigation.top
+    - navigation.tracking
+    - navigation.footer
+    - toc.follow
+    - search.suggest
+    - search.highlight
+    - search.share
     - content.code.copy
+    - content.code.annotate
+    - content.tabs.link
+    - content.tooltips
+    - content.action.edit
+    - content.action.view
+  font:
+    text: Inter
+    code: JetBrains Mono
 
 plugins:
-  - search
+  - search:
+      separator: '[\s\-_,:!=\[\]()"`/]+|\.(?!\d)|&[lg]t;|(?!\b)(?=[A-Z][a-z])'
   - mkdocstrings:
+      default_handler: python
       handlers:
         python:
           options:
             show_source: true
+            show_root_heading: true
+            show_root_full_path: false
+            show_symbol_type_heading: true
+            show_symbol_type_toc: true
+            show_signature_annotations: true
+            separate_signature: true
+            line_length: 80
+            merge_init_into_class: true
             docstring_style: google
+            docstring_section_style: table
+            members_order: source
+            filters: ["!^_"]
+            heading_level: 3
 
 nav:
   - Home: index.md
   - Getting Started: getting-started.md
+  - Guides:
+      - Modes & Anytime delivery: guides/modes-and-anytime.md
+      - Cancel-token protocol: guides/cancel-token.md
   - API Reference:
       - Space: api/space.md
-      - Algorithms: api/algorithms.md
-      - Spaces: api/spaces.md
       - SearchResult: api/result.md
+      - Specialized Spaces: api/spaces.md
+      - Algorithms: api/algorithms.md
 
 exclude_docs: |
   superpowers/
 
 markdown_extensions:
-  - pymdownx.highlight
-  - pymdownx.superfences
+  - abbr
   - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+      toc_depth: 3
+  - pymdownx.arithmatex:
+      generic: true
+  - pymdownx.betterem
+  - pymdownx.caret
+  - pymdownx.details
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.keys
+  - pymdownx.mark
+  - pymdownx.smartsymbols
+  - pymdownx.snippets
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - pymdownx.tilde
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/gia-uh/pathos
+      name: PATHOS on GitHub
+    - icon: fontawesome/brands/python
+      link: https://pypi.org/project/pathos-ai/
+      name: PATHOS on PyPI
+  generator: false

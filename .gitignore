@@ -20,3 +20,6 @@ venv/
 # Worktrees
 .worktrees/
 
+# mkdocs build output
+site/
+

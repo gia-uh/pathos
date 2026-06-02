@@ -1,5 +1,22 @@
 # Algorithms
 
+PATHOS algorithms are organized by family. The auto-solver picks the most powerful compatible
+algorithm via [`Algorithm.score_for`][pathos.algorithms.base.Algorithm.score_for] — see the
+[Modes & Anytime delivery](../guides/modes-and-anytime.md) guide for how `mode="auto"`
+makes [`AnytimeAStar`][pathos.algorithms.informed.AnytimeAStar] the default on A\*-family
+problems.
+
+## Base
+
+::: pathos.algorithms.base.Algorithm
+
+## Meta-algorithms
+
+Meta-algorithms compose base algorithms. The first one shipped is the
+anytime A\* cascade — see the [Modes & Anytime delivery](../guides/modes-and-anytime.md) guide.
+
+::: pathos.algorithms.informed.AnytimeAStar
+
 ## Uninformed
 
 ::: pathos.algorithms.uninformed.BFS
@@ -21,11 +38,12 @@
 ::: pathos.algorithms.local.TabuSearch
 ::: pathos.algorithms.local.LocalBeamSearch
 
-## Evolutionary
+## Evolutionary / Metaheuristic
 
 ::: pathos.algorithms.evolutionary.SimulatedAnnealing
 ::: pathos.algorithms.evolutionary.GeneticAlgorithm
 ::: pathos.algorithms.evolutionary.DifferentialEvolution
+::: pathos.algorithms.evolutionary.ParticleSwarm
 
 ## Adversarial
 
