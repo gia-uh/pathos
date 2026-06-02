@@ -334,6 +334,10 @@ class AnytimeAStar(Algorithm):
                           Capability.HEURISTIC, Capability.EVALUATE})
     power_rank = 0  # irrelevant — score_for short-circuits
 
+    # Populated immediately below this class definition, after
+    # GreedyBestFirst/WeightedAStar/AStar are all in scope.
+    SCHEDULE: list[tuple[type[Algorithm], dict[str, Any]]] = []
+
     @classmethod
     def score_for(cls, space: Any) -> float:
         if space._mode == "auto":
@@ -341,9 +345,52 @@ class AnytimeAStar(Algorithm):
         return -math.inf
 
     def solve(self) -> SearchResult:
-        # Cascade body lives in Task 8. This scaffold returns not_found
-        # so tests verifying selection (not behaviour) can pass.
+        import dataclasses
         t0 = time.perf_counter()
-        return SearchResult.not_found(
-            "AnytimeAStar", 0, time.perf_counter() - t0,
+        best: SearchResult | None = None
+        for alg_cls, kwargs in self.SCHEDULE:
+            if self.space._cancel_requested():
+                break
+            phase_result = alg_cls(self.space, **kwargs).solve()
+            if self._is_better(phase_result, best):
+                best = phase_result
+        if best is None:
+            return SearchResult.not_found(
+                "AnytimeAStar", 0, time.perf_counter() - t0,
+            )
+        return dataclasses.replace(
+            best,
+            algorithm="AnytimeAStar",
+            elapsed=time.perf_counter() - t0,
         )
+
+    @staticmethod
+    def _is_better(candidate: SearchResult, best: SearchResult | None) -> bool:
+        """Incumbent comparison rule.
+
+        - A `found=False` candidate never displaces anything.
+        - If `best` is None and candidate is found, candidate wins.
+        - Otherwise lower cost wins; ties broken by tighter epsilon
+          (lower; None and inf treated as worst).
+        """
+        if not candidate.found:
+            return False
+        if best is None:
+            return True
+        c_cost = candidate.cost if candidate.cost is not None else math.inf
+        b_cost = best.cost if best.cost is not None else math.inf
+        if c_cost != b_cost:
+            return c_cost < b_cost
+        c_eps = candidate.epsilon if candidate.epsilon is not None else math.inf
+        b_eps = best.epsilon if best.epsilon is not None else math.inf
+        return c_eps < b_eps
+
+
+AnytimeAStar.SCHEDULE = [
+    (GreedyBestFirst, {}),
+    (WeightedAStar, {"weight": 5.0}),
+    (WeightedAStar, {"weight": 3.0}),
+    (WeightedAStar, {"weight": 2.0}),
+    (WeightedAStar, {"weight": 1.5}),
+    (AStar, {}),
+]
