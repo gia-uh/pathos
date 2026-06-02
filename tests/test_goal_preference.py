@@ -100,7 +100,11 @@ def test_8puzzle_still_picks_astar():
 
 def test_cspspace_still_picks_backtracking():
     """CSPSpace declares GOAL; among goal-honoring CSP-shaped algos
-    Backtracking (rank 9) outranks FC (8) after the prior demote."""
+    Backtracking (rank 9) outranks FC (8) after the prior demote.
+
+    Default mode is "auto" → AnytimeCSP wins. Pin mode="exact" to verify
+    the base Backtracking pick is still selection-correct (same shape as
+    test_8puzzle_still_picks_astar)."""
     csp = CSPSpace(variables=list(range(4)))
 
     @csp.domain
@@ -112,7 +116,7 @@ def test_cspspace_still_picks_backtracking():
         return True
 
     from pathos.algorithms.csp import Backtracking
-    assert csp.solver()._select() is Backtracking
+    assert csp.solver(mode="exact")._select() is Backtracking
 
 
 def test_falls_back_to_full_pool_when_no_goal_honoring_compatible():

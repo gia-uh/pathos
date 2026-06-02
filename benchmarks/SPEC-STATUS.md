@@ -143,6 +143,7 @@ Spec fields and actual `@dataclass SearchResult` fields are identical:
 | `Space`, `GraphSpace`, `CSPSpace`, `TourSpace`, `GameSpace` | ✓ |
 | Auto-solver with power-rank selection | ✓ — context-aware `score_for(space)` + `mode` knob; FINDINGS §2 fully closed |
 | Anytime cascade meta-algorithm for A*-family | ✓ — `AnytimeAStar` registered; 6-phase cascade with cancel-token cooperation |
+| Anytime cascade meta-algorithm for CSP-family | ✓ — `AnytimeCSP` registered; `[MinConflicts (if EVALUATE), Backtracking]` cascade |
 | Cancel-token primitive | ✓ — `pathos/core/cancel.py`; checked by 10 algorithms in v1 |
 | SearchResult.epsilon | ✓ — admissible algorithms emit 1.0, WeightedAStar emits weight, Greedy emits inf |
 | `SearchResult` uniform return type | ✓ |
@@ -189,7 +190,16 @@ cascade. `CancelToken` primitive added; 10 algorithms (HC, TabuSearch,
 LocalBeamSearch, SA, GA, DE, PSO, BFS, DFS, IDDFS, UCS, AStar, WAStar,
 Greedy, BidirA*) check it at top of main loop. SIGALRM handler sets the
 token instead of raising; 2s SIGVTALRM watchdog backstops for non-
-cooperating algorithms (IDA*, CSP). `SearchResult.epsilon` + `.optimal`
-property. Genuinely open work: AnytimeLocal/AnytimeCSP/AnytimeAdversarial
-meta-algorithms (spec sketches), per-phase budget enforcement, IDA*
-cancel-token integration (recursive shape).
+cooperating algorithms (IDA*, CSP).
+
+**Status after 2026-06-02 AnytimeCSP ship.** Cascade pattern extended to
+the CSP family: `AnytimeCSP` wins selection under `mode="auto"` for any
+CSP-shaped space (initial state is a dict). Cascade is
+`[MinConflicts (max_iter=200, only if EVALUATE present), Backtracking]`.
+Algorithm base gained an `optional` class attr so meta-algorithms can
+declare capabilities they consume dynamically — Solver treats
+`requires | optional` as "used" for the unused-capability warning. Tests
+at `tests/test_anytime_csp.py` (9). Genuinely open work:
+AnytimeLocal/AnytimeAdversarial meta-algorithms (spec sketches),
+per-phase budget enforcement, IDA* cancel-token integration (recursive
+shape).

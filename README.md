@@ -50,7 +50,7 @@ pip install pathos-ai
 | `@successors + @goal + @heuristic` | A*, IDA*, Greedy Best-First |
 | `@successors + @goal + @heuristic + @evaluate` | Weighted A*, UCS |
 | `.adversarial() + @terminal + @utility` | Minimax, Alpha-Beta, MCTS |
-| `CSPSpace + @constraint` | Backtracking, Forward Checking |
+| `CSPSpace + @constraint` | Backtracking, Forward Checking, Min-Conflicts (with `@evaluate`) — cascaded by `AnytimeCSP` under `mode="auto"` |
 
 ## Specialized Spaces
 
@@ -94,6 +94,13 @@ spaces and runs a cascade `[Greedy, WAStar(5,3,2,1.5), AStar]`, keeping
 the best incumbent across phases. On a generous budget the final A\* phase
 returns the proven-optimal answer; on a tight budget you get the best
 incumbent so far instead of `not_found`.
+
+On CSP-shaped spaces (`CSPSpace` or any space whose initial state is a
+partial-assignment dict), `AnytimeCSP` wins selection under `mode="auto"`
+and runs a cascade `[MinConflicts, Backtracking]` — MinConflicts is only
+included when `@evaluate` is declared (it greedily picks the lowest-
+violation child). The first phase that returns a consistent complete
+assignment wins; if MinConflicts gives up, Backtracking takes over.
 
 `SearchResult.epsilon` tells you the quality bound: `1.0` is proven
 optimal, `>1.0` is ε-bounded (cost ≤ ε × optimal), `inf` is unbounded

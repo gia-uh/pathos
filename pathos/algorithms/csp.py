@@ -1,4 +1,6 @@
 from __future__ import annotations
+import dataclasses
+import math
 import time
 import random
 from typing import Any, cast
@@ -194,3 +196,64 @@ class MinConflicts(Algorithm):
             _, current = min(neighbors, key=lambda ac: self.space._evaluate(ac[1]))
 
         return SearchResult.not_found("MinConflicts", self.max_iter, time.perf_counter() - t0)
+
+
+@register
+class AnytimeCSP(Algorithm):
+    """Anytime CSP — meta-algorithm that delivers best-effort under a
+    wall-clock budget for CSP-shaped spaces.
+
+    Runs a cascade [MinConflicts (if EVALUATE present), Backtracking].
+    MinConflicts is fast but incomplete; Backtracking is complete but may
+    exhaust the budget on hard instances. The first phase that finds a
+    consistent complete assignment wins — for CSPs, any solution is a
+    solution (there is no further "improvement" to chase), so the cascade
+    exits early instead of running all phases.
+
+    Wins auto-selection only when space._mode == "auto" AND the space is
+    CSP-shaped (initial state is a dict — partial assignment). Requires
+    only SUCCESSORS+GOAL (the Backtracking floor); EVALUATE is used to
+    extend the cascade with MinConflicts when available.
+
+    Mirrors the AnytimeAStar pattern in pathos/algorithms/informed.py.
+    """
+
+    requires = frozenset({Capability.SUCCESSORS, Capability.GOAL})
+    optional = frozenset({Capability.EVALUATE})  # consumed via MinConflicts
+    power_rank = 0  # irrelevant — score_for short-circuits
+
+    @classmethod
+    def compatible_with(cls, space: Any) -> bool:
+        return super().compatible_with(space) and _is_csp_shaped(space)
+
+    @classmethod
+    def score_for(cls, space: Any) -> float:
+        if space._mode == "auto" and _is_csp_shaped(space):
+            return 1000.0
+        return -math.inf
+
+    def _build_schedule(self) -> list[tuple[type[Algorithm], dict[str, Any]]]:
+        """Construct the per-invocation cascade based on declared
+        capabilities. MinConflicts is included only when EVALUATE is
+        present (it greedily picks the lowest-violation child)."""
+        schedule: list[tuple[type[Algorithm], dict[str, Any]]] = []
+        if Capability.EVALUATE in self.space.capabilities:
+            schedule.append((MinConflicts, {"max_iter": 200}))
+        schedule.append((Backtracking, {}))
+        return schedule
+
+    def solve(self) -> SearchResult:
+        t0 = time.perf_counter()
+        for alg_cls, kwargs in self._build_schedule():
+            if self.space._cancel_requested():
+                break
+            phase_result = alg_cls(self.space, **kwargs).solve()
+            if phase_result.found:
+                return dataclasses.replace(
+                    phase_result,
+                    algorithm="AnytimeCSP",
+                    elapsed=time.perf_counter() - t0,
+                )
+        return SearchResult.not_found(
+            "AnytimeCSP", 0, time.perf_counter() - t0,
+        )

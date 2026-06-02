@@ -63,8 +63,11 @@ class Solver:
                 self.space._mode = prev_mode
         else:
             best = max(compatible, key=lambda cls: cls.score_for(self.space))
-        # warn about unused capabilities
-        used = best.requires
+        # warn about unused capabilities — `optional` lists capabilities
+        # the algorithm may consume dynamically (used by meta-algorithms
+        # whose cascade includes phases that only fire when an optional
+        # capability is present).
+        used = best.requires | best.optional
         declared = self.space.capabilities
         unused = declared - used
         if unused:

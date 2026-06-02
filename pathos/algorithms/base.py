@@ -10,6 +10,14 @@ if TYPE_CHECKING:
 
 class Algorithm(ABC):
     requires: frozenset[Capability] = frozenset()
+    # Capabilities this algorithm CAN consume when present but does not
+    # require to run. Meta-algorithms list capabilities used by some
+    # phases of their cascade here (e.g. AnytimeCSP consumes EVALUATE
+    # via MinConflicts when the user declares it, but still runs the
+    # Backtracking-only cascade when they don't). The Solver treats
+    # `requires | optional` as the "used" set when emitting the
+    # unused-capabilities warning.
+    optional: frozenset[Capability] = frozenset()
     power_rank: int = 0  # higher = preferred when multiple are compatible
 
     def __init__(self, space: Space) -> None:
