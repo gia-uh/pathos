@@ -54,8 +54,10 @@ def test_anytime_returns_optimal_on_small_problem():
     assert result.found is True
     assert result.cost == 5.0
     assert result.algorithm == "AnytimeAStar"
-    # epsilon and .optimal assertions are tightened in Task 12 once
-    # AStar is wired to emit epsilon=1.0 on success.
+    # AStar phase emits epsilon=1.0; AnytimeAStar inherits via
+    # dataclasses.replace(best, algorithm="AnytimeAStar", elapsed=…).
+    assert result.epsilon == 1.0
+    assert result.optimal is True
 
 
 def test_anytime_cancel_returns_best_so_far():

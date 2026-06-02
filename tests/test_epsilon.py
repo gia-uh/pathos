@@ -126,3 +126,60 @@ def test_dfs_emits_epsilon_inf_on_success():
     r = DFS(space).solve()
     assert r.found is True
     assert r.epsilon == math.inf
+
+
+# ---------------------------------------------------------------------------
+# Per-algorithm epsilon emission — informed family
+# ---------------------------------------------------------------------------
+
+
+def _trivial_goal_with_heuristic() -> Space:
+    space = Space().initial("a")
+
+    @space.successors
+    def expand(s):
+        if s == "a":
+            yield "go_b", "b"
+        elif s == "b":
+            yield "go_c", "c"
+
+    @space.goal
+    def is_goal(s):
+        return s == "c"
+
+    @space.heuristic
+    def h(s):
+        return 0.0
+
+    @space.evaluate
+    def cost(s):
+        return 1.0
+
+    return space
+
+
+def test_astar_emits_epsilon_one():
+    from pathos.algorithms.informed import AStar
+    space = _trivial_goal_with_heuristic()
+    r = AStar(space).solve()
+    assert r.found is True
+    assert r.epsilon == 1.0
+    assert r.optimal is True
+
+
+def test_weighted_astar_emits_epsilon_equal_to_weight():
+    from pathos.algorithms.informed import WeightedAStar
+    space = _trivial_goal_with_heuristic()
+    r = WeightedAStar(space, weight=2.5).solve()
+    assert r.found is True
+    assert r.epsilon == 2.5
+    assert r.optimal is False
+
+
+def test_greedy_emits_epsilon_inf():
+    from pathos.algorithms.informed import GreedyBestFirst
+    space = _trivial_goal_with_heuristic()
+    r = GreedyBestFirst(space).solve()
+    assert r.found is True
+    assert r.epsilon == math.inf
+    assert r.optimal is False

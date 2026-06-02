@@ -44,12 +44,15 @@ class AStar(Algorithm):
         expanded = 0
 
         while frontier:
+            if self.space._cancel_requested():
+                return SearchResult.not_found("AStar", expanded, time.perf_counter() - t0)
             f, _, g, state, path = heapq.heappop(frontier)
             if g > g_score.get(state, math.inf):
                 continue
             if self.space._goal(state):
                 return SearchResult(
                     state, path, g, "AStar", expanded, time.perf_counter() - t0, True,
+                    epsilon=1.0,
                 )
             expanded += 1
             for action, child in self.space._successors(state):
@@ -95,6 +98,8 @@ class GreedyBestFirst(Algorithm):
         expanded = 0
 
         while frontier:
+            if self.space._cancel_requested():
+                return SearchResult.not_found("GreedyBestFirst", expanded, time.perf_counter() - t0)
             _, _, state, path = heapq.heappop(frontier)
             if state in visited:
                 continue
@@ -103,6 +108,7 @@ class GreedyBestFirst(Algorithm):
                 return SearchResult(
                     state, path, float(len(path)), "GreedyBestFirst",
                     expanded, time.perf_counter() - t0, True,
+                    epsilon=math.inf,
                 )
             expanded += 1
             for action, child in self.space._successors(state):
@@ -152,12 +158,15 @@ class WeightedAStar(Algorithm):
         expanded = 0
 
         while frontier:
+            if self.space._cancel_requested():
+                return SearchResult.not_found("WeightedAStar", expanded, time.perf_counter() - t0)
             _, _, g, state, path = heapq.heappop(frontier)
             if g > g_score.get(state, math.inf):
                 continue
             if self.space._goal(state):
                 return SearchResult(
                     state, path, g, "WeightedAStar", expanded, time.perf_counter() - t0, True,
+                    epsilon=self.weight,
                 )
             expanded += 1
             for action, child in self.space._successors(state):
@@ -176,6 +185,12 @@ class IDAstar(Algorithm):
     """IDA* — iterative deepening A*, memory-efficient optimal search.
 
     Requires: successors, goal, heuristic, evaluate.
+
+    NOTE: Recursive shape; v1 does not implement cancel-token checks
+    (deferred to v2). The Solver's watchdog SIGALRM-TimeoutError
+    backstop kills runaway IDA* searches and returns not_found. To
+    use IDA* under mode="auto" cooperatively, wait for v2 or pin
+    `candidates=[IDAstar]` with the mode="exact" semantics.
 
     Attributes:
         requires: Capability set needed.
@@ -276,6 +291,8 @@ class BidirectionalAStar(Algorithm):
         expanded = 0
 
         while fwd_open or bwd_open:
+            if self.space._cancel_requested():
+                return SearchResult.not_found("BidirectionalAStar", expanded, time.perf_counter() - t0)
             if fwd_open:
                 _, _, s = heapq.heappop(fwd_open)
                 expanded += 1
@@ -308,7 +325,7 @@ class BidirectionalAStar(Algorithm):
 
         if mu == math.inf:
             return SearchResult.not_found("BidirectionalAStar", expanded, time.perf_counter() - t0)
-        return SearchResult(goal, [], mu, "BidirectionalAStar", expanded, time.perf_counter() - t0, True)
+        return SearchResult(goal, [], mu, "BidirectionalAStar", expanded, time.perf_counter() - t0, True, epsilon=1.0)
 
 
 @register
