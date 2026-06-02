@@ -40,6 +40,8 @@ class SimulatedAnnealing(Algorithm):
         T = self.T0
 
         for i in range(self.max_iter):
+            if self.space._cancel_requested():
+                break
             neighbors = list(self.space._successors(current))
             if not neighbors:
                 break
@@ -128,6 +130,8 @@ class GeneticAlgorithm(Algorithm):
         mutate = self.mutate_fn or _default_mutate
 
         for _ in range(self.generations):
+            if self.space._cancel_requested():
+                break
             costs = batch_map(self.space._evaluate, population, self._n_workers)
             pairs = sorted(zip(costs, population))
             population = [x for _, x in pairs[: self.pop_size // 2]]
@@ -190,6 +194,8 @@ class DifferentialEvolution(Algorithm):
         best, best_cost = pop[best_idx], costs[best_idx]
 
         for _ in range(self.generations):
+            if self.space._cancel_requested():
+                break
             trials = []
             for i in range(self.pop_size):
                 x = pop[i]
@@ -320,6 +326,8 @@ class ParticleSwarm(Algorithm):
         gbest_cost = costs[gbest_idx]
 
         for _ in range(self.generations):
+            if self.space._cancel_requested():
+                break
             for i in range(self.pop_size):
                 r1 = random.random()
                 r2 = random.random()

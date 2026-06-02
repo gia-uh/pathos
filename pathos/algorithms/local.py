@@ -111,6 +111,8 @@ class TabuSearch(Algorithm):
         expanded = 0
 
         for _ in range(self.max_iter):
+            if self.space._cancel_requested():
+                break
             neighbors = [
                 (a, child) for a, child in self.space._successors(current)
                 if child not in tabu
@@ -160,6 +162,8 @@ class LocalBeamSearch(Algorithm):
         expanded = 0
 
         for _ in range(self.max_iter):
+            if self.space._cancel_requested():
+                break
             candidates = []
             for state in beam:
                 for _, child in self.space._successors(state):

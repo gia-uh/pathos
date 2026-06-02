@@ -7,6 +7,10 @@ the token is set.
 """
 from __future__ import annotations
 
+import random
+
+import pytest
+
 import pathos.algorithms  # noqa: F401 — register algorithms
 from pathos import Space
 from pathos.algorithms.local import HillClimbing
@@ -86,3 +90,96 @@ def test_hill_climbing_no_cancel_still_runs_normally():
     # On this chain, HC descends to the end.
     assert result.solution == 100
     assert result.cost == 0.0
+
+
+# ---------------------------------------------------------------------------
+# Other iteration-based metaheuristics
+# ---------------------------------------------------------------------------
+
+from pathos.algorithms.local import TabuSearch, LocalBeamSearch  # noqa: E402
+from pathos.algorithms.evolutionary import (  # noqa: E402
+    SimulatedAnnealing,
+    GeneticAlgorithm,
+    DifferentialEvolution,
+    ParticleSwarm,
+)
+
+
+def _cycle_space(size: int = 1000) -> Space:
+    """A cycle of `size` states; every state has a single successor
+    (next-mod-size). Cost is the state index. Loop-based algorithms
+    will keep iterating forever (or until max_iter) without naturally
+    exiting — perfect to exercise the cancel-token check."""
+    space = Space().initial(0)
+
+    @space.successors
+    def expand(s):
+        yield "next", (s + 1) % size
+
+    @space.evaluate
+    def cost(s):
+        return float(s)
+
+    return space
+
+
+@pytest.mark.parametrize("alg_cls,kwargs", [
+    (TabuSearch, {"max_iter": 1_000_000, "tabu_size": 0}),
+    (LocalBeamSearch, {"max_iter": 1_000_000, "k": 3}),
+    (SimulatedAnnealing, {"max_iter": 1_000_000}),
+])
+def test_metaheuristic_returns_best_so_far_on_cancel(alg_cls, kwargs):
+    """Each iteration-based metaheuristic should bail out cleanly when
+    the cancel token is set. The cycle space won't let them exit
+    naturally; without the cancel-check they'd loop 1M times.
+    Verify by wall-time bound: bail must happen in <0.5s."""
+    import time as _time_mod
+
+    space = _cycle_space(size=1000)
+    space._request_cancel()
+
+    alg = alg_cls(space, **kwargs)
+    t0 = _time_mod.perf_counter()
+    result = alg.solve()
+    wall = _time_mod.perf_counter() - t0
+
+    assert result.algorithm == alg_cls.__name__
+    assert wall < 0.5, (
+        f"{alg_cls.__name__} ran {wall:.3f}s — cancel check missing"
+    )
+
+
+def _quadratic_bowl_space(dim: int = 5) -> Space:
+    """Continuous optimization: minimize sum(xi**2)."""
+    space = Space().initial(lambda: [random.uniform(-5, 5) for _ in range(dim)])
+
+    @space.evaluate
+    def f(x):
+        return sum(xi * xi for xi in x)
+
+    return space
+
+
+@pytest.mark.parametrize("alg_cls,kwargs", [
+    (GeneticAlgorithm, {"pop_size": 30, "generations": 100_000}),
+    (DifferentialEvolution, {"pop_size": 30, "generations": 100_000}),
+    (ParticleSwarm, {"pop_size": 30, "generations": 100_000}),
+])
+def test_population_algorithm_returns_best_so_far_on_cancel(alg_cls, kwargs):
+    """Population-based algorithms with absurd generation count would
+    take seconds-to-minutes without a cancel check. Pre-arm the token
+    and verify wall time stays bounded."""
+    import time as _time_mod
+
+    space = _quadratic_bowl_space()
+    space._request_cancel()
+
+    alg = alg_cls(space, **kwargs)
+    t0 = _time_mod.perf_counter()
+    result = alg.solve()
+    wall = _time_mod.perf_counter() - t0
+
+    assert result.algorithm == alg_cls.__name__
+    assert wall < 1.0, (
+        f"{alg_cls.__name__} ran {wall:.3f}s — cancel check missing"
+    )
