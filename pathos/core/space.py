@@ -157,9 +157,16 @@ class Space:
             raise ValueError(
                 f"mode must be one of {sorted(_VALID_MODES)}, got {mode!r}"
             )
+        effective_mode = mode if mode is not None else self._mode
+        effective_timeout = timeout or self._timeout
+        # The cascade is meaningless without a budget — running every
+        # phase to completion defeats the anytime contract. Inject a 1h
+        # default when mode=auto and neither layer supplied one.
+        if effective_mode == "auto" and effective_timeout is None:
+            effective_timeout = 3600.0
         return Solver(
             self,
             candidates=candidates,
-            timeout=timeout or self._timeout,
+            timeout=effective_timeout,
             mode=mode,
         )
