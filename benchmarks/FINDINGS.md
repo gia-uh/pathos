@@ -8,6 +8,18 @@ spaces (commit 89de86b) so DE/PSO win on continuous optimization.
 Selector now uses context-aware `score_for(space)` instead of static
 `power_rank`. **The benchmark-driven audit is fully green.**
 
+**Anytime cascade (this commit cycle):**
+mode="auto" is now the default. AnytimeAStar wins selection on
+A*-family spaces and runs a cascade
+[Greedy, WAStar(5,3,2,1.5), AStar] keeping the best incumbent
+across phases. SearchResult.epsilon distinguishes proven-optimal
+(1.0) from bounded-suboptimal (>1) and unbounded (inf) results.
+Every metaheuristic became naturally anytime via the cancel-token
+protocol — solver(timeout=…) on a GA now returns the best
+individual seen in T seconds instead of not_found. v1 cascade
+covers A*-family only; AnytimeLocal/AnytimeCSP/AnytimeAdversarial
+are sketched in [[2026-06-02-pathos-anytime-cascade-design]].
+
 Bugs and surprises surfaced by `python -m benchmarks.bench --all-algorithms`.
 Numbers below come from a 3-repeat run on Intel i7-6820HQ @ 2.70 GHz, Python
 3.13. Reproduce with `--all-algorithms --repeat 3 --timeout 10 --json …`.

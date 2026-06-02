@@ -26,7 +26,8 @@ Format: ✓ in place · ◐ partial · ✗ missing · ⚠ spec/code disagree.
 | `.adversarial(players, maximizing_player)` | ✓ | |
 | `.parallel(workers)` | ⚠ | **Spec says "API reserved, not implemented" — but it IS implemented** (recent commits 83af022, ebbc4e5, f7a57ad, a0ea240, bdfd1f4). Spec is stale. |
 | `.timeout(seconds)` | ✓ | **Fixed in 087059b**: Solver.solve wraps the algorithm run in a SIGALRM-based wall-clock guard; returns `SearchResult.not_found(...)` on expiry. Both `space.solver(timeout=N)` and `space.timeout(N).solver()` honour it. 4 regression tests in `tests/test_timeout.py`. |
-| `.optimality(mode)` | ✓ | **New — closes FINDINGS §2c.** Two modes: `"exact"` (default, admissible algorithms preferred) and `"approximate"` (bounded-suboptimal A\* variants outrank exact). Honoured via `score_for(space)` overrides on `AStar`, `IDAstar`, `BidirectionalAStar`, `WeightedAStar`, `GreedyBestFirst`. Both `space.optimality("approximate")` and `space.solver(optimality="approximate")` work; the kwarg is per-call and does not mutate space state. 13 regression tests in `tests/test_optimality.py`. |
+| `.mode(mode)` | ✓ | **Renamed from `.optimality(mode)` in the anytime-cascade commit cycle.** Three values: `"exact"`, `"approximate"`, `"auto"` (default). `"auto"` makes AnytimeAStar win selection and auto-applies a 3600s default timeout. `solver(mode=…)` kwarg is per-call (non-mutating). Tests in `tests/test_mode.py` (14) and `tests/test_mode_auto.py` (10). |
+| `.timeout(seconds)` (with mode=auto) | ✓ | **Cooperative cancellation in the anytime-cascade commit cycle.** SIGALRM sets `space._cancel_token`; cooperating algorithms return best-so-far cleanly. 2s watchdog (SIGVTALRM) raises TimeoutError as backstop for algorithms not yet wired (IDA*, CSP). |
 
 ## Decorator hooks
 
@@ -140,7 +141,10 @@ Spec fields and actual `@dataclass SearchResult` fields are identical:
 |---|:---:|
 | All algorithm families pure Python | ◐ — PSO and AC-3 absent; HC sub-variants absent; cross-family combos absent |
 | `Space`, `GraphSpace`, `CSPSpace`, `TourSpace`, `GameSpace` | ✓ |
-| Auto-solver with power-rank selection | ✓ — context-aware `score_for(space)` + `optimality` knob; FINDINGS §2 fully closed |
+| Auto-solver with power-rank selection | ✓ — context-aware `score_for(space)` + `mode` knob; FINDINGS §2 fully closed |
+| Anytime cascade meta-algorithm for A*-family | ✓ — `AnytimeAStar` registered; 6-phase cascade with cancel-token cooperation |
+| Cancel-token primitive | ✓ — `pathos/core/cancel.py`; checked by 10 algorithms in v1 |
+| SearchResult.epsilon | ✓ — admissible algorithms emit 1.0, WeightedAStar emits weight, Greedy emits inf |
 | `SearchResult` uniform return type | ✓ |
 | Warning system for unused capabilities | ✓ — `Solver._select` emits `UserWarning` when capabilities are unused |
 | Type stubs for mypy/pyright compatibility | ✓ — entire codebase is `mypy --strict` clean (commit 9ab0bc8) |
@@ -175,8 +179,17 @@ the auto-selector to offer crashing algorithms.
 Spec sync ✓, FC rank demote ✓, 4 lattice-crash guards ✓, `.timeout()` wired ✓.
 
 **Status after 2026-06-02 session — benchmark audit fully green.**
-§2c closed by the `optimality` knob (this commit). All FINDINGS items now
-either FIXED or explicitly out-of-scope. Genuinely open work has shifted to
-new spec items: HC sub-variants, TourSpace 3-opt, AC-3 exposure decision,
-cross-family combos (Memetic GA, ILS, WalkSAT), function-signature
-validation in decorators, and the MCTS heuristic-cutoff variant.
+§2c closed by the `optimality` knob (commit 8ba0aec). All FINDINGS items now
+either FIXED or explicitly out-of-scope.
+
+**Status after 2026-06-02 anytime-cascade ship (13 commits).**
+`optimality` knob renamed to `mode={"exact", "approximate", "auto"}`,
+default `"auto"`. `AnytimeAStar` meta-algorithm registered with 6-phase
+cascade. `CancelToken` primitive added; 10 algorithms (HC, TabuSearch,
+LocalBeamSearch, SA, GA, DE, PSO, BFS, DFS, IDDFS, UCS, AStar, WAStar,
+Greedy, BidirA*) check it at top of main loop. SIGALRM handler sets the
+token instead of raising; 2s SIGVTALRM watchdog backstops for non-
+cooperating algorithms (IDA*, CSP). `SearchResult.epsilon` + `.optimal`
+property. Genuinely open work: AnytimeLocal/AnytimeCSP/AnytimeAdversarial
+meta-algorithms (spec sketches), per-phase budget enforcement, IDA*
+cancel-token integration (recursive shape).

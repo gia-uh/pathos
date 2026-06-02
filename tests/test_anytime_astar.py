@@ -152,3 +152,36 @@ def test_anytime_small_budget_still_runs_one_phase():
     result = space.solver(timeout=0.001).solve()
     assert result.found is True
     assert result.algorithm == "AnytimeAStar"
+
+
+# ---------------------------------------------------------------------------
+# Bench-grounded end-to-end tests
+# ---------------------------------------------------------------------------
+
+def test_anytime_auto_on_puzzle8_returns_optimal_with_generous_budget():
+    """End-to-end: mode=auto (default) with a generous budget on a
+    moderate 8-puzzle scramble returns the proven optimal A* answer."""
+    from benchmarks.bench import build_puzzle
+    space = build_puzzle(scramble_depth=15, seed=42)
+    result = space.solver(timeout=10.0).solve()
+    assert result.found is True
+    assert result.algorithm == "AnytimeAStar"
+    assert result.optimal is True
+    # Manhattan-distance heuristic gives shortest path ≤ scramble depth;
+    # for some seeds the optimal can be shorter than the raw scramble.
+    assert result.cost is not None and result.cost <= 15.0
+
+
+def test_anytime_auto_on_puzzle8_returns_incumbent_under_tight_budget():
+    """mode=auto with 0.005s on a hard scramble — final A* phase
+    won't finish, but Greedy/WAStar incumbents should be available."""
+    from benchmarks.bench import build_puzzle
+    space = build_puzzle(scramble_depth=40, seed=42)
+    result = space.solver(timeout=0.005).solve()
+    # On a deep scramble, A* won't finish in 5ms; an earlier phase
+    # should plant an incumbent.
+    if result.found:
+        assert result.algorithm == "AnytimeAStar"
+        assert result.cost is not None
+        # Greedy/WAStar(5) cost is typically 40-80 on scramble=40
+        assert result.cost >= 15

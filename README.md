@@ -70,30 +70,47 @@ tour = TourSpace(nodes=cities, distances=dist_matrix)
 game = GameSpace().initial(board)
 ```
 
-## Optimality preference
+## Modes — exact, approximate, auto
 
-When multiple goal-bearing algorithms are compatible (e.g. A\*, Weighted A\*,
-Greedy Best-First on `@successors + @goal + @heuristic + @evaluate`), the
-default auto-pick is **admissible** — it prefers the algorithm that
-guarantees the optimal solution. Opt in to bounded-suboptimal alternatives
-when speed matters more than the last few percent of optimality:
+The `solver()` factory selects an algorithm based on the space's declared
+capabilities and the mode you ask for. Three modes:
 
 ```python
-# Default: A* wins (admissible, optimal)
+# Default: anytime cascade. Always-ready, gives best incumbent under
+# the budget (1h if you don't set one). Optimal if it finishes.
 space.solver().solve()
+space.solver(timeout=60).solve()
 
-# Bounded-suboptimal A* variants outrank exact ones — Weighted A* wins,
-# typically 2-10× faster, costs within ε of optimal.
-space.optimality("approximate").solver().solve()
+# Single-shot admissible algorithm. No timeout default; runs to
+# completion or until you cut it off.
+space.solver(mode="exact").solve()
 
-# Per-call kwarg (does not mutate space):
-space.solver(optimality="approximate").solve()
+# Single-shot bounded-suboptimal algorithm. Faster than exact.
+space.solver(mode="approximate").solve()
 ```
 
-Two modes: `"exact"` (default) and `"approximate"`. The preference is
-honoured by `Algorithm.score_for(space)` — admissible algorithms demote in
-approximate mode; `WeightedAStar` outranks them; `GreedyBestFirst` gets a
-smaller bump (no quality bound). Explicit `candidates=[…]` always wins.
+Under `mode="auto"` (default), `AnytimeAStar` wins selection on A\*-family
+spaces and runs a cascade `[Greedy, WAStar(5,3,2,1.5), AStar]`, keeping
+the best incumbent across phases. On a generous budget the final A\* phase
+returns the proven-optimal answer; on a tight budget you get the best
+incumbent so far instead of `not_found`.
+
+`SearchResult.epsilon` tells you the quality bound: `1.0` is proven
+optimal, `>1.0` is ε-bounded (cost ≤ ε × optimal), `inf` is unbounded
+(greedy), `None` means the algorithm doesn't report a bound (e.g.
+metaheuristics).
+
+```python
+result = space.solver(timeout=10).solve()
+if result.optimal:
+    print(f"Optimal: cost {result.cost}")
+else:
+    print(f"ε-bounded ({result.epsilon}): cost {result.cost}")
+```
+
+Every metaheuristic is naturally anytime regardless of mode — set a
+timeout and the algorithm returns its best individual seen so far
+when the budget runs out (cooperative `CancelToken` protocol).
 
 ## Parallel Evaluation
 
