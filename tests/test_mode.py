@@ -51,17 +51,16 @@ def _puzzle_like_space() -> Space:
 # Default and exact-mode behaviour
 # ---------------------------------------------------------------------------
 
-def test_default_mode_is_exact_until_auto_arrives():
-    """The default flips to 'auto' once AnytimeAStar is registered.
-    Until then (Task 4 commit), the default stays 'exact' for backward
-    compatibility with existing tests."""
+def test_default_mode_is_auto():
+    """The default flipped from 'exact' to 'auto' alongside AnytimeAStar
+    registration. Tests pinning AStar now request mode='exact' explicitly."""
     space = _puzzle_like_space()
-    assert space._mode == "exact"
+    assert space._mode == "auto"
 
 
 def test_exact_mode_picks_astar_on_puzzle_capabilities():
     space = _puzzle_like_space()
-    picked = space.solver()._select()
+    picked = space.solver(mode="exact")._select()
     assert picked is AStar
 
 

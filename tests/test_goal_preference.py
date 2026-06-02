@@ -93,7 +93,9 @@ def test_8puzzle_still_picks_astar():
         return 1.0
 
     from pathos.algorithms.informed import AStar
-    assert space.solver()._select() is AStar
+    # Default mode is "auto" → AnytimeAStar wins. Pin mode="exact" to
+    # verify the base AStar pick is still admissible-correct.
+    assert space.solver(mode="exact")._select() is AStar
 
 
 def test_cspspace_still_picks_backtracking():

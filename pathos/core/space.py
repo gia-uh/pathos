@@ -31,7 +31,7 @@ class Space:
         self._initial_value: Any = None
         self._initial_factory: Callable[[], Any] | None = None
         self._timeout: float | None = None
-        self._mode: Mode = "exact"
+        self._mode: Mode = "auto"
         self._cancel_token: CancelToken = CancelToken()
         self._n_workers: int = 1
         self._adversarial: bool = False

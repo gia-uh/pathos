@@ -18,7 +18,10 @@ def test_graphspace_astar():
     @space.heuristic
     def h(n): return {"A": 5.0, "B": 3.0, "C": 1.0, "D": 0.0}.get(n, 0.0)
 
-    result = space.solver().solve()
+    # Default mode is "auto" → AnytimeAStar.solve() returns not_found
+    # until Task 8 ships the cascade body. Pin mode="exact" here to
+    # verify AStar's correctness on this small graph.
+    result = space.solver(mode="exact").solve()
     assert result.found
     assert result.solution == "D"
     assert result.cost == 4.0  # A->B->C->D = 1+2+1

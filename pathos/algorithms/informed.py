@@ -309,3 +309,41 @@ class BidirectionalAStar(Algorithm):
         if mu == math.inf:
             return SearchResult.not_found("BidirectionalAStar", expanded, time.perf_counter() - t0)
         return SearchResult(goal, [], mu, "BidirectionalAStar", expanded, time.perf_counter() - t0, True)
+
+
+@register
+class AnytimeAStar(Algorithm):
+    """Anytime A* — meta-algorithm that delivers best-effort under a
+    wall-clock budget.
+
+    Runs a cascade of progressively-tighter A* variants
+    [GreedyBestFirst, WeightedAStar(5), WeightedAStar(3),
+     WeightedAStar(2), WeightedAStar(1.5), AStar], keeping the best
+    incumbent across phases. Exits cleanly when
+    space._cancel_requested() is set (either by the Solver's SIGALRM
+    or by an outer meta-algorithm).
+
+    Wins auto-selection only when space._mode == "auto" — its
+    score_for returns -inf otherwise so users explicitly opting into
+    "exact" or "approximate" keep the base-algorithm pick.
+
+    Requires the same capabilities as AStar (the heaviest of the cascade).
+    """
+
+    requires = frozenset({Capability.SUCCESSORS, Capability.GOAL,
+                          Capability.HEURISTIC, Capability.EVALUATE})
+    power_rank = 0  # irrelevant — score_for short-circuits
+
+    @classmethod
+    def score_for(cls, space: Any) -> float:
+        if space._mode == "auto":
+            return 1000.0
+        return -math.inf
+
+    def solve(self) -> SearchResult:
+        # Cascade body lives in Task 8. This scaffold returns not_found
+        # so tests verifying selection (not behaviour) can pass.
+        t0 = time.perf_counter()
+        return SearchResult.not_found(
+            "AnytimeAStar", 0, time.perf_counter() - t0,
+        )

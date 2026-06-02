@@ -62,3 +62,48 @@ def test_approximate_mode_has_no_implicit_timeout():
     space = _trivial_goal_space()
     solver = space.solver(mode="approximate")
     assert solver.timeout is None
+
+
+# ---------------------------------------------------------------------------
+# AnytimeAStar selection (added in T7)
+# ---------------------------------------------------------------------------
+
+from pathos.algorithms.informed import AnytimeAStar  # noqa: E402
+
+
+def test_anytime_astar_wins_selection_when_mode_auto_on_puzzle_capabilities():
+    space = _trivial_goal_space()  # mode defaults to "auto" after this task
+    picked = space.solver()._select()
+    assert picked is AnytimeAStar
+
+
+def test_anytime_astar_does_not_win_under_exact_mode():
+    space = _trivial_goal_space()
+    from pathos.algorithms.informed import AStar
+    picked = space.solver(mode="exact")._select()
+    assert picked is AStar  # admissible — AnytimeAStar's score_for returns -inf
+
+
+def test_anytime_astar_does_not_win_under_approximate_mode():
+    space = _trivial_goal_space()
+    from pathos.algorithms.informed import WeightedAStar
+    picked = space.solver(mode="approximate")._select()
+    assert picked is WeightedAStar
+
+
+def test_anytime_astar_capability_set_matches_astar():
+    """AnytimeAStar runs WeightedAStar phases — needs everything A* needs."""
+    from pathos.algorithms.informed import AStar
+    assert AnytimeAStar.requires == AStar.requires
+
+
+def test_anytime_astar_score_in_auto_exceeds_all_siblings():
+    space = _trivial_goal_space()  # default mode auto
+    from pathos.algorithms.informed import (
+        AStar, WeightedAStar, GreedyBestFirst, IDAstar,
+    )
+    s_anytime = AnytimeAStar.score_for(space)
+    assert s_anytime > AStar.score_for(space)
+    assert s_anytime > WeightedAStar.score_for(space)
+    assert s_anytime > GreedyBestFirst.score_for(space)
+    assert s_anytime > IDAstar.score_for(space)
