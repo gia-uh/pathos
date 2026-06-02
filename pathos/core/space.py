@@ -1,6 +1,7 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Callable, Literal
 from pathos.core.capabilities import Capability
+from pathos.core.cancel import CancelToken
 
 if TYPE_CHECKING:
     from pathos.core.solver import Solver
@@ -31,6 +32,7 @@ class Space:
         self._initial_factory: Callable[[], Any] | None = None
         self._timeout: float | None = None
         self._optimality: Optimality = "exact"
+        self._cancel_token: CancelToken = CancelToken()
         self._n_workers: int = 1
         self._adversarial: bool = False
         self._players: int = 2
@@ -92,6 +94,14 @@ class Space:
         # evaluate/successors functions must be picklable (module-level) when workers > 1
         self._n_workers = workers
         return self
+
+    # --- cancel-token wire (used by Solver + algorithm solve loops) ---
+
+    def _cancel_requested(self) -> bool:
+        return self._cancel_token.is_set()
+
+    def _request_cancel(self) -> None:
+        self._cancel_token.request_cancel()
 
     @property
     def _initial(self) -> Any:
