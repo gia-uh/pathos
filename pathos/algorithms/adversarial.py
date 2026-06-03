@@ -197,18 +197,24 @@ class MCTS(Algorithm):
         t0 = time.perf_counter()
         root = _MCTSNode(self.space._initial, None, self.space)
 
+        completed = 0
         for _ in range(self.iterations):
+            if self.space._cancel_requested():
+                break
             node = self._select(root)
             if not self.space._terminal(node.state):
                 node = self._expand(node)
             reward = self._simulate(node.state)
             self._backprop(node, reward)
+            completed += 1
 
-        best = max(root.children, key=lambda n: n.visits) if root.children else root
+        if not root.children:
+            return SearchResult.not_found("MCTS", completed, time.perf_counter() - t0)
+        best = max(root.children, key=lambda n: n.visits)
         return SearchResult(
             best.state, None,
             self.space._utility(best.state, self.space._maximizing_player),
-            "MCTS", self.iterations, time.perf_counter() - t0, True,
+            "MCTS", completed, time.perf_counter() - t0, True,
         )
 
     def _select(self, node: _MCTSNode) -> _MCTSNode:
