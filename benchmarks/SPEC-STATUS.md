@@ -145,6 +145,7 @@ Spec fields and actual `@dataclass SearchResult` fields are identical:
 | Anytime cascade meta-algorithm for A*-family | ✓ — `AnytimeAStar` registered; 6-phase cascade with cancel-token cooperation |
 | Anytime cascade meta-algorithm for CSP-family | ✓ — `AnytimeCSP` registered; `[MinConflicts (if EVALUATE), Backtracking]` cascade |
 | Anytime cascade meta-algorithm for local-search family | ✓ — `AnytimeLocal` registered; `[HillClimbing, SimulatedAnnealing, TabuSearch]` cascade |
+| Anytime cascade meta-algorithm for adversarial family | ✓ — `AnytimeAdversarial` registered; iterative deepening over AlphaBeta (2-player) or Negamax (3+ player) with PV-first move ordering |
 | Cancel-token primitive | ✓ — `pathos/core/cancel.py`; checked by 10 algorithms in v1 |
 | SearchResult.epsilon | ✓ — admissible algorithms emit 1.0, WeightedAStar emits weight, Greedy emits inf |
 | `SearchResult` uniform return type | ✓ |
@@ -215,3 +216,35 @@ to `AnytimeAStar` / uninformed algorithms. Tests at
 `tests/test_anytime_local.py` (9). Genuinely open work:
 AnytimeAdversarial meta-algorithm (spec sketch), per-phase budget
 enforcement, IDA* cancel-token integration (recursive shape).
+
+**Status after 2026-06-03 AnytimeAdversarial ship.** Cascade pattern
+extended to the adversarial family — fourth and final algorithm family
+covered under `mode="auto"`. `AnytimeAdversarial` registered; routes
+to `AlphaBeta` for 2-player and `Negamax` for 3+-player spaces via
+`_phase_class()`. Iterative deepening from depth 1 to `max_depth`,
+threading the previous depth's principal variation as `pv_hint` into
+the next phase's `AlphaBeta` / `Negamax` constructor — AB pruning
+becomes substantially more effective with correct move ordering.
+Cancel-token cooperation added to `AlphaBeta._ab`, `Minimax._minimax`,
+`Negamax._negamax` (top of recursion → `(nan, None)` sentinel → root
+`solve()` returns `not_found`) and `MCTS.solve` (top of iteration loop
+→ best-so-far from partial tree). All three of AB/Minimax/Negamax now
+populate `SearchResult.path` with `[(action, state), ...]` — contract
+change documented in
+[2026-06-03-pathos-anytime-adversarial-design](../../vault/Atlas/Architecture/2026-06-03-pathos-anytime-adversarial-design.md).
+
+Bundled mode-contract fixes: `MCTS.score_for` bumps to 53 under
+`mode="approximate"` (closes the prior gap where approximate did
+nothing for game spaces); `Negamax.score_for` bumps to 52 when
+`space._players > 2` (closes a pre-existing bug where `AlphaBeta`
+silently won `"exact"` selection on multi-player games despite not
+honouring `_players`). Tests at `tests/test_anytime_adversarial.py`,
+`tests/test_adversarial_cancel.py`, `tests/test_adversarial_pv.py`,
+`tests/test_adversarial_mode.py`.
+
+**Genuinely open work after this ship:** per-phase budget enforcement
+(deep depths can still blow a tight total budget if the cancel checks
+inside `_ab` don't fire often enough for cheap leaf evals); IDA*
+cancel-token integration (recursive shape, deferred); transposition
+tables, aspiration windows, killer-move heuristic for AB (all listed
+as separate follow-ups in the design spec's "Out of scope" section).
