@@ -201,6 +201,12 @@ class Negamax(Algorithm):
     requires = frozenset({Capability.SUCCESSORS, Capability.TERMINAL, Capability.UTILITY})
     power_rank = 42
 
+    @classmethod
+    def score_for(cls, space: Any) -> float:
+        if space._players > 2:
+            return float(cls.power_rank) + 10  # 42+10=52, above AlphaBeta=45
+        return float(cls.power_rank)
+
     def __init__(
         self,
         space: Any,
@@ -307,6 +313,12 @@ class MCTS(Algorithm):
 
     requires = frozenset({Capability.SUCCESSORS, Capability.TERMINAL, Capability.UTILITY})
     power_rank = 43
+
+    @classmethod
+    def score_for(cls, space: Any) -> float:
+        if space._mode == "approximate":
+            return float(cls.power_rank) + 10  # 43+10=53, above AlphaBeta=45
+        return float(cls.power_rank)
 
     def __init__(self, space: Any, iterations: int = 1000) -> None:
         super().__init__(space)
