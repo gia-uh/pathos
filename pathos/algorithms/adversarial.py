@@ -1,4 +1,5 @@
 from __future__ import annotations
+import dataclasses
 import time
 import math
 import random
@@ -362,3 +363,85 @@ class MCTS(Algorithm):
             node.visits += 1
             node.value += reward
             node = node.parent
+
+
+@register
+class AnytimeAdversarial(Algorithm):
+    """Anytime Adversarial Search — meta-algorithm for game spaces.
+
+    Runs iterative deepening over AlphaBeta (2-player) or Negamax
+    (3+ player), threading the prior depth's principal variation as
+    pv_hint into the next depth's call. Best move at deepest fully-
+    completed depth wins.
+
+    Wins auto-selection only when space._mode == "auto" — score_for
+    returns -inf otherwise so users explicitly opting into "exact"
+    or "approximate" keep the base-algorithm pick.
+
+    Cancel-token cooperation at two granularities: between phases
+    (depth-loop top), and inside the underlying recursion (AB/Negamax
+    return (nan, None) on cancel, surfaced as not_found by their
+    solve(), interpreted by AnytimeAdversarial as 'phase failed' and
+    fall back to last good incumbent).
+
+    Requires the intersection of AB/Negamax: SUCCESSORS+TERMINAL+UTILITY.
+    """
+
+    requires = frozenset({Capability.SUCCESSORS, Capability.TERMINAL, Capability.UTILITY})
+    power_rank = 0  # irrelevant — score_for short-circuits
+
+    @classmethod
+    def score_for(cls, space: Any) -> float:
+        return 1000.0 if space._mode == "auto" else -math.inf
+
+    def __init__(self, space: Any, max_depth: int = 100) -> None:
+        super().__init__(space)
+        self.max_depth = max_depth
+
+    def _phase_class(self) -> type[Algorithm]:
+        return AlphaBeta if self.space._players == 2 else Negamax
+
+    def solve(self) -> SearchResult:
+        t0 = time.perf_counter()
+        phase_cls = self._phase_class()
+        best: SearchResult | None = None
+        last_pv: list[tuple[Any, Any]] = []
+        total_expanded = 0
+
+        for d in range(1, self.max_depth + 1):
+            if self.space._cancel_requested():
+                break
+            phase = phase_cls(self.space, **{"max_depth": d, "pv_hint": last_pv})
+            phase_result = phase.solve()
+            if not phase_result.found:
+                break
+            total_expanded += phase_result.nodes_expanded
+            last_pv = list(phase_result.path or [])
+            if self._is_better(phase_result, best):
+                best = phase_result
+
+        elapsed = time.perf_counter() - t0
+        if best is None:
+            return SearchResult.not_found("AnytimeAdversarial", total_expanded, elapsed)
+        return dataclasses.replace(
+            best,
+            algorithm="AnytimeAdversarial",
+            nodes_expanded=total_expanded,
+            elapsed=elapsed,
+        )
+
+    @staticmethod
+    def _is_better(candidate: SearchResult, best: SearchResult | None) -> bool:
+        """Higher utility wins (adversarial maximizes for the maximizing player).
+
+        Mirror image of AnytimeLocal._is_better. SearchResult.cost stores
+        the utility scalar for adversarial — see AlphaBeta.solve assigning
+        `cost=val`.
+        """
+        if not candidate.found:
+            return False
+        if best is None:
+            return True
+        c = candidate.cost if candidate.cost is not None else -math.inf
+        b = best.cost if best.cost is not None else -math.inf
+        return c > b
