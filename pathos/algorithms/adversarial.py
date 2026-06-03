@@ -23,36 +23,74 @@ class Minimax(Algorithm):
     requires = frozenset({Capability.SUCCESSORS, Capability.TERMINAL, Capability.UTILITY})
     power_rank = 40
 
-    def __init__(self, space: Any, max_depth: int = 100) -> None:
+    def __init__(
+        self,
+        space: Any,
+        max_depth: int = 100,
+        pv_hint: list[tuple[Any, Any]] | None = None,
+    ) -> None:
         super().__init__(space)
         self.max_depth = max_depth
+        self.pv_hint = pv_hint
 
-    def _minimax(self, state: Any, depth: int, is_max: bool) -> tuple[float, Any]:
+    def _minimax(
+        self,
+        state: Any,
+        depth: int,
+        is_max: bool,
+        hint: list[tuple[Any, Any]] | None,
+    ) -> tuple[float, list[tuple[Any, Any]] | None]:
+        if self.space._cancel_requested():
+            return math.nan, None
         if self.space._terminal(state) or depth == 0:
-            player = self.space._maximizing_player
-            return self.space._utility(state, player), state
+            return self.space._utility(state, self.space._maximizing_player), []
         moves = list(self.space._successors(state))
         if not moves:
-            return self.space._utility(state, self.space._maximizing_player), state
+            return self.space._utility(state, self.space._maximizing_player), []
+
+        hinted_action = hint[0][0] if hint else None
+        if hinted_action is not None:
+            moves.sort(key=lambda ac: 0 if ac[0] == hinted_action else 1)
+        sub_hint = hint[1:] if hint else None
+
+        best_pv: list[tuple[Any, Any]] = []
         if is_max:
-            best_val, best_state = -math.inf, None
-            for _, child in moves:
-                val, leaf = self._minimax(child, depth - 1, False)
+            best_val = -math.inf
+            for action, child in moves:
+                val, child_pv = self._minimax(child, depth - 1, False, sub_hint)
+                if child_pv is None:
+                    return math.nan, None
                 if val > best_val:
-                    best_val, best_state = val, leaf
-            return best_val, best_state
+                    best_val = val
+                    best_pv = [(action, child), *child_pv]
+            return best_val, best_pv
         else:
-            best_val, best_state = math.inf, None
-            for _, child in moves:
-                val, leaf = self._minimax(child, depth - 1, True)
+            best_val = math.inf
+            for action, child in moves:
+                val, child_pv = self._minimax(child, depth - 1, True, sub_hint)
+                if child_pv is None:
+                    return math.nan, None
                 if val < best_val:
-                    best_val, best_state = val, leaf
-            return best_val, best_state
+                    best_val = val
+                    best_pv = [(action, child), *child_pv]
+            return best_val, best_pv
 
     def solve(self) -> SearchResult:
         t0 = time.perf_counter()
-        val, state = self._minimax(self.space._initial, self.max_depth, True)
-        return SearchResult(state, None, val, "Minimax", 0, time.perf_counter() - t0, state is not None)
+        val, pv = self._minimax(self.space._initial, self.max_depth, True, self.pv_hint)
+        elapsed = time.perf_counter() - t0
+        if pv is None:
+            return SearchResult.not_found("Minimax", 0, elapsed)
+        return SearchResult(
+            solution=self.space._initial,
+            path=pv,
+            cost=val,
+            algorithm="Minimax",
+            nodes_expanded=0,
+            elapsed=elapsed,
+            found=True,
+            epsilon=1.0,
+        )
 
 
 @register
@@ -156,41 +194,79 @@ class Negamax(Algorithm):
 
     Attributes:
         requires: Capability set needed.
-        power_rank: 42.
+        power_rank: 42 (bumped to 52 by score_for when _players > 2).
     """
 
     requires = frozenset({Capability.SUCCESSORS, Capability.TERMINAL, Capability.UTILITY})
     power_rank = 42
 
-    def __init__(self, space: Any, max_depth: int = 100) -> None:
+    def __init__(
+        self,
+        space: Any,
+        max_depth: int = 100,
+        pv_hint: list[tuple[Any, Any]] | None = None,
+    ) -> None:
         super().__init__(space)
         self.max_depth = max_depth
+        self.pv_hint = pv_hint
 
-    def _negamax(self, state: Any, depth: int, alpha: float, beta: float, player: int) -> tuple[float, Any]:
+    def _negamax(
+        self,
+        state: Any,
+        depth: int,
+        alpha: float,
+        beta: float,
+        player: int,
+        hint: list[tuple[Any, Any]] | None,
+    ) -> tuple[float, list[tuple[Any, Any]] | None]:
+        if self.space._cancel_requested():
+            return math.nan, None
         if self.space._terminal(state) or depth == 0:
-            val = self.space._utility(state, player)
-            return val, state
+            return self.space._utility(state, player), []
         moves = list(self.space._successors(state))
         if not moves:
-            return self.space._utility(state, player), state
-        best_val, best_state = -math.inf, moves[0][1]
+            return self.space._utility(state, player), []
+
+        hinted_action = hint[0][0] if hint else None
+        if hinted_action is not None:
+            moves.sort(key=lambda ac: 0 if ac[0] == hinted_action else 1)
+        sub_hint = hint[1:] if hint else None
+
         next_player = (player + 1) % self.space._players
-        for _, child in moves:
-            child_val, _ = self._negamax(child, depth - 1, -beta, -alpha, next_player)
-            if -child_val > best_val:
-                best_val, best_state = -child_val, child
+        best_val = -math.inf
+        best_pv: list[tuple[Any, Any]] = []
+        for action, child in moves:
+            child_val, child_pv = self._negamax(child, depth - 1, -beta, -alpha, next_player, sub_hint)
+            if child_pv is None:
+                return math.nan, None
+            negated = -child_val
+            if negated > best_val:
+                best_val = negated
+                best_pv = [(action, child), *child_pv]
             alpha = max(alpha, best_val)
             if alpha >= beta:
                 break
-        return best_val, best_state
+        return best_val, best_pv
 
     def solve(self) -> SearchResult:
         t0 = time.perf_counter()
-        val, state = self._negamax(
+        val, pv = self._negamax(
             self.space._initial, self.max_depth, -math.inf, math.inf,
-            self.space._maximizing_player
+            self.space._maximizing_player, self.pv_hint,
         )
-        return SearchResult(state, None, val, "Negamax", 0, time.perf_counter() - t0, state is not None)
+        elapsed = time.perf_counter() - t0
+        if pv is None:
+            return SearchResult.not_found("Negamax", 0, elapsed)
+        return SearchResult(
+            solution=self.space._initial,
+            path=pv,
+            cost=val,
+            algorithm="Negamax",
+            nodes_expanded=0,
+            elapsed=elapsed,
+            found=True,
+            epsilon=1.0,
+        )
 
 
 class _MCTSNode:

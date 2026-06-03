@@ -75,3 +75,19 @@ def test_alphabeta_returns_not_found_on_pre_armed_cancel():
     assert result.found is False
     assert result.solution is None
     assert result.path is None
+
+
+def test_minimax_returns_not_found_on_pre_armed_cancel():
+    space = _tiny_game()
+    space._request_cancel()
+    result = Minimax(space, max_depth=10).solve()
+    assert result.algorithm == "Minimax"
+    assert result.found is False
+
+
+def test_negamax_returns_not_found_on_pre_armed_cancel():
+    space = _tiny_game()
+    space._request_cancel()
+    result = Negamax(space, max_depth=10).solve()
+    assert result.algorithm == "Negamax"
+    assert result.found is False

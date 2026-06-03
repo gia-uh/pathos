@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import pathos.algorithms  # noqa: F401
 from pathos import Space
-from pathos.algorithms.adversarial import AlphaBeta
+from pathos.algorithms.adversarial import AlphaBeta, Minimax, Negamax
 
 
 def _wide_game() -> Space:
@@ -77,3 +77,36 @@ def test_alphabeta_pv_hint_none_unchanged():
     a = AlphaBeta(space, max_depth=3, pv_hint=None).solve()
     b = AlphaBeta(space, max_depth=3).solve()
     assert a.cost == b.cost
+
+
+def test_minimax_populates_path_with_pv():
+    space = _wide_game()
+    result = Minimax(space, max_depth=3).solve()
+    assert result.found
+    assert result.path is not None
+    assert len(result.path) >= 1
+    assert result.solution == "root"
+
+
+def test_negamax_populates_path_with_pv():
+    space = _wide_game()
+    result = Negamax(space, max_depth=3).solve()
+    assert result.found
+    assert result.path is not None
+    assert result.solution == "root"
+
+
+def test_minimax_pv_hint_honoured():
+    space = _wide_game()
+    baseline = Minimax(space, max_depth=3).solve()
+    hinted = Minimax(space, max_depth=3, pv_hint=baseline.path).solve()
+    assert hinted.cost == baseline.cost
+    assert hinted.path is not None
+    assert hinted.path[0][0] == baseline.path[0][0]
+
+
+def test_negamax_pv_hint_honoured():
+    space = _wide_game()
+    baseline = Negamax(space, max_depth=3).solve()
+    hinted = Negamax(space, max_depth=3, pv_hint=baseline.path).solve()
+    assert hinted.cost == baseline.cost
