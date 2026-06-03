@@ -92,3 +92,47 @@ def test_anytime_adversarial_loses_under_mode_exact():
     space = _ttt_space().mode("exact")
     result = space.solver().solve()
     assert result.algorithm != "AnytimeAdversarial"
+
+
+def test_anytime_adversarial_matches_alphabeta_on_tictactoe():
+    """On tic-tac-toe (fully solvable at depth 9) AnytimeAdversarial's
+    result must match a direct AlphaBeta(max_depth=9) call."""
+    space = _ttt_space()
+    direct = AlphaBeta(space, max_depth=9).solve()
+    space2 = _ttt_space().mode("auto")
+    ata = space2.solver().solve()
+    assert ata.algorithm == "AnytimeAdversarial"
+    assert ata.cost == direct.cost
+    # First move of the PV should agree.
+    assert ata.path is not None and direct.path is not None
+    assert ata.path[0][0] == direct.path[0][0]
+
+
+def test_anytime_adversarial_path_is_pv():
+    space = _ttt_space().mode("auto")
+    result = space.solver().solve()
+    assert result.path is not None
+    # Every PV step is (action, state).
+    for action, state in result.path:
+        assert isinstance(state, tuple)
+        assert len(state) == 9
+
+
+def test_anytime_adversarial_pv_reuse_between_phases(monkeypatch):
+    """Spy on AlphaBeta instantiation to confirm depth-d+1 gets the
+    depth-d PV as pv_hint."""
+    space = _ttt_space().mode("auto")
+    calls: list[tuple[int, list[tuple[Any, Any]] | None]] = []
+    original_init = AlphaBeta.__init__
+
+    def spy_init(self, space, max_depth=100, pv_hint=None):
+        calls.append((max_depth, pv_hint))
+        original_init(self, space, max_depth=max_depth, pv_hint=pv_hint)
+
+    monkeypatch.setattr(AlphaBeta, "__init__", spy_init)
+    space.solver().solve()
+    # Depth 1 should have no hint; depth 2+ should inherit prior PV.
+    assert calls[0] == (1, [])
+    assert len(calls) >= 2
+    for d, hint in calls[1:]:
+        assert hint is not None  # inherited from prior depth's path
