@@ -65,3 +65,13 @@ def test_mcts_returns_best_so_far_on_mid_cancel():
     assert result.algorithm == "MCTS"
     assert result.found is True
     assert result.nodes_expanded < 10_000  # exited early
+
+
+def test_alphabeta_returns_not_found_on_pre_armed_cancel():
+    space = _tiny_game()
+    space._request_cancel()
+    result = AlphaBeta(space, max_depth=10).solve()
+    assert result.algorithm == "AlphaBeta"
+    assert result.found is False
+    assert result.solution is None
+    assert result.path is None
