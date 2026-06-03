@@ -136,3 +136,90 @@ def test_anytime_adversarial_pv_reuse_between_phases(monkeypatch):
     assert len(calls) >= 2
     for d, hint in calls[1:]:
         assert hint is not None  # inherited from prior depth's path
+
+
+def test_anytime_adversarial_returns_last_good_incumbent_on_cancel():
+    """If cancellation fires after depth k completes but during depth
+    k+1, return the depth-k incumbent — not not_found."""
+    space = _ttt_space().mode("auto")
+    # Manually drive: depth 1 will complete trivially; arm the token
+    # before the depth-2 AB call lands. We do this by hooking AlphaBeta
+    # __init__ to fire cancel when max_depth >= 2.
+    original_init = AlphaBeta.__init__
+
+    def hooked_init(self, space, max_depth=100, pv_hint=None):
+        original_init(self, space, max_depth=max_depth, pv_hint=pv_hint)
+        if max_depth >= 2:
+            space._request_cancel()
+
+    AlphaBeta.__init__ = hooked_init
+    try:
+        result = AnytimeAdversarial(space).solve()
+    finally:
+        AlphaBeta.__init__ = original_init
+    # Depth 1 completed; depth 2 immediately cancelled at root → meta sees
+    # not_found from depth 2 → breaks → returns depth-1 incumbent.
+    assert result.found is True
+    assert result.algorithm == "AnytimeAdversarial"
+
+
+def test_anytime_adversarial_returns_not_found_when_no_phase_completes():
+    """Pre-armed token: depth 1 fails immediately, no incumbent ever set."""
+    space = _ttt_space().mode("auto")
+    space._request_cancel()
+    result = AnytimeAdversarial(space).solve()
+    assert result.found is False
+    assert result.algorithm == "AnytimeAdversarial"
+
+
+def test_anytime_adversarial_routes_to_negamax_for_3_players(monkeypatch):
+    space = _multi_player_space(players=3).mode("auto")
+    calls: list[type] = []
+    original_ab_init = AlphaBeta.__init__
+    original_nm_init = Negamax.__init__
+
+    def spy_ab(self, *args, **kwargs):
+        calls.append(AlphaBeta)
+        original_ab_init(self, *args, **kwargs)
+
+    def spy_nm(self, *args, **kwargs):
+        calls.append(Negamax)
+        original_nm_init(self, *args, **kwargs)
+
+    monkeypatch.setattr(AlphaBeta, "__init__", spy_ab)
+    monkeypatch.setattr(Negamax, "__init__", spy_nm)
+    space.solver().solve()
+    assert len(calls) >= 1
+    assert all(c is Negamax for c in calls)
+    assert AlphaBeta not in calls
+
+
+def test_anytime_adversarial_routes_to_alphabeta_for_2_players(monkeypatch):
+    space = _ttt_space().mode("auto")
+    calls: list[type] = []
+    original_ab_init = AlphaBeta.__init__
+    original_nm_init = Negamax.__init__
+
+    def spy_ab(self, *args, **kwargs):
+        calls.append(AlphaBeta)
+        original_ab_init(self, *args, **kwargs)
+
+    def spy_nm(self, *args, **kwargs):
+        calls.append(Negamax)
+        original_nm_init(self, *args, **kwargs)
+
+    monkeypatch.setattr(AlphaBeta, "__init__", spy_ab)
+    monkeypatch.setattr(Negamax, "__init__", spy_nm)
+    space.solver().solve()
+    assert len(calls) >= 1
+    assert all(c is AlphaBeta for c in calls)
+    assert Negamax not in calls
+
+
+def test_anytime_adversarial_result_metadata():
+    space = _ttt_space().mode("auto")
+    result = space.solver().solve()
+    assert result.algorithm == "AnytimeAdversarial"
+    assert result.epsilon == 1.0  # inherited from AlphaBeta admissible
+    assert result.nodes_expanded >= 0  # sum-of-phases; AB sets 0 today
+    assert result.elapsed > 0
