@@ -34,16 +34,19 @@ def test_minimax_selects_best():
     space = _game_space()
     result = Minimax(space).solve()
     assert result.found
-    # Minimax: root→n1 gives max(3,5)=5, root→n2 gives max(2,9)=9
-    # Min at root picks min(5,9)=5, so optimal action leads to n1
-    # Then max picks l2 (5)
-    assert result.solution in {"l1", "l2", "l3", "l4"}
+    # Empirical minimax value: max(min(3,5), min(2,9)) = max(3, 2) = 3.
+    # (Minimax/Negamax solution-as-initial-state lands in a later commit.)
+    assert result.cost == 3
 
 def test_alphabeta_same_as_minimax():
     space = _game_space()
     mm = Minimax(space).solve()
     ab = AlphaBeta(space).solve()
     assert mm.cost == ab.cost
+    # New AlphaBeta contract: solution is the initial state; path is the PV.
+    assert ab.solution == "root"
+    assert ab.path is not None
+    assert len(ab.path) >= 1
 
 def test_negamax_finds_solution():
     space = _game_space()
