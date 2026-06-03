@@ -12,10 +12,15 @@ problems.
 
 ## Meta-algorithms
 
-Meta-algorithms compose base algorithms. The first one shipped is the
-anytime A\* cascade — see the [Modes & Anytime delivery](../guides/modes-and-anytime.md) guide.
+Meta-algorithms compose base algorithms. Four ship in v0.2.0 — one per
+family — and each wins selection under `mode="auto"` on its capability
+shape. See the [Modes & Anytime delivery](../guides/modes-and-anytime.md)
+guide for the cascade tables.
 
 ::: pathos.algorithms.informed.AnytimeAStar
+::: pathos.algorithms.local.AnytimeLocal
+::: pathos.algorithms.csp.AnytimeCSP
+::: pathos.algorithms.adversarial.AnytimeAdversarial
 
 ## Uninformed
 

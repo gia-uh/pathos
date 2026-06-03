@@ -27,9 +27,8 @@ When `Solver.solve()` is called with a `timeout`:
 3. **Watchdog backstop**: 2 seconds after the primary signal, a secondary
    `SIGVTALRM` (`ITIMER_VIRTUAL`) fires. Its handler raises `TimeoutError`,
    which `Solver.solve()` catches and converts to `SearchResult.not_found`.
-   This handles algorithms that don't yet check the token (in v1: `IDA*`,
-   `Backtracking`, `ForwardChecking`, `MinConflicts`, `Minimax`, `AlphaBeta`,
-   `Negamax`, `MCTS`).
+   This handles algorithms that don't check the token (currently: `IDA*`,
+   `Backtracking`, `ForwardChecking`, `MinConflicts`).
 
 ```mermaid
 sequenceDiagram
@@ -83,15 +82,19 @@ best-so-far on cancel:
   no meaningful partial path possible)
 - **Informed**: `AStar`, `WeightedAStar`, `GreedyBestFirst`,
   `BidirectionalAStar` (return `not_found`)
+- **Adversarial**: `Minimax`, `AlphaBeta`, `Negamax` check the token at
+  the top of their recursion (returning a `(nan, None)` sentinel that
+  collapses to `SearchResult.not_found` at the root); `MCTS` checks it
+  at the top of its iteration loop and returns best-so-far from the
+  partial tree.
 
-## Algorithms that use the watchdog backstop (v2 will wire them)
+## Algorithms that use the watchdog backstop
 
-These have recursive shape or CSP recursion patterns that need careful
-handling — v1 relies on the 2s `SIGVTALRM` watchdog grace:
+These have recursive shape that doesn't compose cleanly with a top-of-loop
+check — they rely on the 2s `SIGVTALRM` watchdog grace:
 
 - `IDAstar` (iterative deepening, recursive)
 - `Backtracking`, `ForwardChecking`, `MinConflicts` (CSP recursion)
-- `Minimax`, `AlphaBeta`, `Negamax`, `MCTS` (adversarial recursion)
 
 ## Using the token directly
 

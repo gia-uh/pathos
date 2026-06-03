@@ -109,14 +109,27 @@ result = space.solver(candidates=[AStar], mode="auto").solve()
 assert result.algorithm == "AStar"
 ```
 
-## Extending to other algorithm families (v2)
+## Other family cascades
 
-The cascade isn't a special case in the `Solver` — it's just an `Algorithm`
-whose `score_for` wins under a specific mode. Future meta-algorithms
-(`AnytimeLocal`, `AnytimeCSP`, `AnytimeAdversarial`) will slot in the same
-way: register themselves, return a large score under `mode="auto"` on their
-capability set, run their own cascade in `solve()`.
+The cascade isn't a special case in `Solver` — it's just an `Algorithm` whose
+`score_for` wins under `mode="auto"` for a specific capability shape. The
+same pattern covers all four families:
 
-The cancel-token primitive is universal — every metaheuristic and path-search
-algorithm already checks it, so they all become naturally anytime as soon as a
+| Family | Meta-algorithm | Capability shape | Cascade |
+|---|---|---|---|
+| A\* (informed path) | [`AnytimeAStar`][pathos.algorithms.informed.AnytimeAStar] | `{SUCCESSORS, GOAL, HEURISTIC, EVALUATE}` | `[Greedy, WAStar(5,3,2,1.5), AStar]` — six phases, lowest-cost incumbent wins. |
+| Local search | [`AnytimeLocal`][pathos.algorithms.local.AnytimeLocal] | `{SUCCESSORS, EVALUATE}` (no `GOAL`) | `[HillClimbing, SimulatedAnnealing, TabuSearch]` — fast-probe + two escape phases. Lowest-cost incumbent wins. |
+| CSP | [`AnytimeCSP`][pathos.algorithms.csp.AnytimeCSP] | `CSPSpace` (initial state is a dict) | `[MinConflicts (only if @evaluate), Backtracking]` — first phase to return a consistent complete assignment wins. |
+| Adversarial | [`AnytimeAdversarial`][pathos.algorithms.adversarial.AnytimeAdversarial] | `.adversarial() + @terminal + @utility` | Iterative deepening from depth 1 to `max_depth` over `AlphaBeta` (2-player) or `Negamax` (3+ player), threading the previous depth's principal variation as `pv_hint` for move ordering. |
+
+All four register themselves with `register`, return a large `score_for`
+under `mode="auto"` on their capability set, and run their own cascade in
+`solve()` — no special case in `Solver`. Selection between them is unambiguous
+because their capability shapes don't overlap: `AnytimeLocal.requires` omits
+`GOAL`, so it cedes goal-bearing spaces to `AnytimeAStar`; `AnytimeCSP`
+matches on CSP shape, etc.
+
+The cancel-token primitive is universal — every metaheuristic, path-search
+algorithm, and adversarial recursion (`Minimax`, `AlphaBeta`, `Negamax`,
+`MCTS`) checks it, so they all become naturally anytime as soon as a
 meta-algorithm composes them.

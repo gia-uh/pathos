@@ -49,7 +49,7 @@ pip install pathos-ai
 | `@successors + @evaluate` | Hill Climbing, Tabu Search, Simulated Annealing — cascaded by `AnytimeLocal` under `mode="auto"` |
 | `@successors + @goal + @heuristic` | A*, IDA*, Greedy Best-First |
 | `@successors + @goal + @heuristic + @evaluate` | Weighted A*, UCS |
-| `.adversarial() + @terminal + @utility` | Minimax, Alpha-Beta, MCTS |
+| `.adversarial() + @terminal + @utility` | Minimax, Alpha-Beta, Negamax, MCTS — iterative-deepened by `AnytimeAdversarial` under `mode="auto"` with PV-first move ordering |
 | `CSPSpace + @constraint` | Backtracking, Forward Checking, Min-Conflicts (with `@evaluate`) — cascaded by `AnytimeCSP` under `mode="auto"` |
 
 ## Specialized Spaces
@@ -110,6 +110,15 @@ is returned; cancellation mid-cascade keeps whichever incumbent was
 already planted. `AnytimeLocal` does not declare `@goal`, so on
 goal-bearing spaces the selector keeps `AnytimeAStar` (with `@heuristic`)
 or the uninformed goal algorithms in charge.
+
+On adversarial spaces (`.adversarial() + @terminal + @utility`),
+`AnytimeAdversarial` wins selection under `mode="auto"` and iteratively
+deepens from depth 1 to `max_depth` over `AlphaBeta` (2-player) or
+`Negamax` (3+ player), threading the previous depth's principal
+variation as `pv_hint` into the next phase for move ordering — α-β
+pruning becomes substantially more effective with a good first move.
+Cancellation mid-deepening keeps the best move from the deepest
+completed depth.
 
 `SearchResult.epsilon` tells you the quality bound: `1.0` is proven
 optimal, `>1.0` is ε-bounded (cost ≤ ε × optimal), `inf` is unbounded

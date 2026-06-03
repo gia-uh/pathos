@@ -63,8 +63,10 @@ Requires Python 3.11+. MIT license.
 
     ---
 
-    `solver().solve()` runs an A\* cascade that always delivers the best
-    incumbent within your budget — never `not_found` when a path exists.
+    `solver().solve()` runs a cascade tuned to your problem family
+    (informed, local, CSP, adversarial) and always delivers the best
+    incumbent within your budget — never `not_found` when a feasible
+    answer exists.
 
     [:octicons-arrow-right-24: Modes & anytime](guides/modes-and-anytime.md)
 
@@ -95,8 +97,8 @@ Requires Python 3.11+. MIT license.
 |---------|---------------------|
 | `@evaluate` | SA, GA, DE, PSO |
 | `@successors + @goal` | BFS, DFS, IDDFS *(DFS is non-optimal — for shortest paths prefer BFS/UCS)* |
-| `@successors + @evaluate` | HillClimbing, TabuSearch, LocalBeamSearch |
+| `@successors + @evaluate` | **AnytimeLocal** (default under `mode="auto"`), HillClimbing, TabuSearch, LocalBeamSearch, SimulatedAnnealing |
 | `@successors + @goal + @heuristic` | GreedyBestFirst |
 | `@successors + @goal + @heuristic + @evaluate` | **AnytimeAStar** (default under `mode="auto"`), AStar, IDAstar, WeightedAStar, BidirectionalAStar, UCS |
-| `.adversarial() + @terminal + @utility` | Minimax, AlphaBeta, Negamax, MCTS |
-| `CSPSpace + @constraint` | Backtracking, ForwardChecking, MinConflicts |
+| `.adversarial() + @terminal + @utility` | **AnytimeAdversarial** (default under `mode="auto"`), Minimax, AlphaBeta, Negamax, MCTS |
+| `CSPSpace + @constraint` | **AnytimeCSP** (default under `mode="auto"`), Backtracking, ForwardChecking, MinConflicts |
