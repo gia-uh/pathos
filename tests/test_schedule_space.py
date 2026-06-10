@@ -123,3 +123,42 @@ def test_fairness_decorator_returns_the_callable_unchanged():
     @s.fairness
     def f(schedule): return 0.5
     assert f is s._fairness_fn
+
+
+def test_to_matrix_empty_state_is_all_false():
+    s = ScheduleSpace(entities=["a", "b"], slots=2)
+    m = s._to_matrix(frozenset())
+    assert m == ((False, False), (False, False))
+
+
+def test_to_matrix_partial_state():
+    s = ScheduleSpace(entities=["a", "b"], slots=2)
+    # ON cells: (slot=0, entity_idx=1), (slot=1, entity_idx=0)
+    m = s._to_matrix(frozenset({(0, 1), (1, 0)}))
+    assert m == ((False, True), (True, False))
+
+
+def test_successors_count_is_T_times_N():
+    s = ScheduleSpace(entities=["a", "b", "c"], slots=4)
+    _attach_demand_capacity_fairness(s)
+    state = frozenset()
+    children = list(s._successors(state))
+    assert len(children) == 12   # 4 * 3
+
+
+def test_successors_each_action_toggles_one_cell():
+    s = ScheduleSpace(entities=["a", "b"], slots=2)
+    _attach_demand_capacity_fairness(s)
+    state = frozenset({(0, 0)})
+    children = dict(s._successors(state))
+    # action label is "(slot, entity_idx)" for the toggled cell
+    assert frozenset({(0, 0), (0, 1)}) in children.values()  # turn (0,1) ON
+    assert frozenset() in children.values()                    # turn (0,0) OFF
+    assert frozenset({(0, 0), (1, 0)}) in children.values()  # turn (1,0) ON
+    assert frozenset({(0, 0), (1, 1)}) in children.values()  # turn (1,1) ON
+
+
+def test_successors_capability_emitted_after_demand_capacity_fairness():
+    s = ScheduleSpace(entities=["a"], slots=2)
+    _attach_demand_capacity_fairness(s)
+    assert Capability.SUCCESSORS in s.capabilities

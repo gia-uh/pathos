@@ -50,6 +50,7 @@ class ScheduleSpace(Space):
             if self._demand_fn is not None:
                 raise RuntimeError("@demand already defined on this space")
             self._demand_fn = fn
+            self._maybe_finalize()
             return fn
         return decorator
 
@@ -59,6 +60,7 @@ class ScheduleSpace(Space):
             if self._capacity_fn is not None:
                 raise RuntimeError("@capacity already defined on this space")
             self._capacity_fn = fn
+            self._maybe_finalize()
             return fn
         return decorator
 
@@ -70,5 +72,41 @@ class ScheduleSpace(Space):
                 raise RuntimeError("@fairness already defined on this space")
             self._fairness_fn = fn
             self.capabilities.add(Capability.EVALUATE)
+            self._maybe_finalize()
             return fn
         return decorator
+
+    # --- internal helpers ---
+
+    def _to_matrix(self, state: frozenset[tuple[int, int]]) -> tuple[tuple[bool, ...], ...]:
+        """Convert a frozenset of (slot, entity_idx) ON cells to a (T, N) matrix."""
+        n = len(self._entities)
+        return tuple(
+            tuple((t, e) in state for e in range(n))
+            for t in range(self._slots)
+        )
+
+    def _setup_successors(self) -> None:
+        from pathos.core.capabilities import Capability
+        T, N = self._slots, len(self._entities)
+
+        def _successors(state: frozenset[tuple[int, int]]) -> Any:
+            for t in range(T):
+                for e in range(N):
+                    cell = (t, e)
+                    if cell in state:
+                        yield f"off({t},{e})", state - {cell}
+                    else:
+                        yield f"on({t},{e})", state | {cell}
+
+        self._successors = _successors
+        self.capabilities.add(Capability.SUCCESSORS)
+
+    def _maybe_finalize(self) -> None:
+        if (
+            self._demand_fn is not None
+            and self._capacity_fn is not None
+            and self._fairness_fn is not None
+            and self._successors is None
+        ):
+            self._setup_successors()
