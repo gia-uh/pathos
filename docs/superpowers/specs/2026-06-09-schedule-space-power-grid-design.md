@@ -72,26 +72,28 @@ A `ScheduleSpace` state is a `frozenset[tuple[int, int]]` — the set of
 equality-comparable. This shape is required because `TabuSearch` keeps a
 tabu list and does `child not in tabu` (`pathos/algorithms/local.py:120`);
 raw `numpy.ndarray` instances raise on equality-in-list. A frozenset
-gives O(1) membership, O(1) hashing on cached `hash`, and dirt-cheap
-"flip one cell" via `s ^ {(t, e)}`.
+gives O(1) membership, O(1) hashing, and cheap "flip one cell" via
+`s ^ {(t, e)}`.
 
-NumPy is used internally for fairness/capacity arithmetic: the helper
-`ScheduleSpace._to_array(state) -> np.ndarray` converts the frozenset to
-a `(T, N)` bool ndarray on demand. Fairness callables receive the ndarray
-form (clean for the user), while algorithms see the frozenset (cheap to
-hash and copy).
+**Zero-deps invariant.** `pyproject.toml` declares `dependencies = []`;
+pathos's core is pure-stdlib. ScheduleSpace MUST keep this invariant:
+no `numpy`, no `networkx`. Fairness callables receive a
+`tuple[tuple[bool, ...], ...]` of shape `(T, N)` — a pure-Python
+immutable matrix. Users who want NumPy convert it themselves inside
+their `@fairness` callable.
 
-The returned `SearchResult.solution` is the **ndarray form** of the final
-state — users get a `(T, N)` bool matrix, not a frozenset.
+The returned `SearchResult.solution` is the matrix form
+(`tuple[tuple[bool, ...], ...]`) of the final state. Users can pass it
+through `numpy.asarray()` at the call site.
 
 ### Constructor
 
 ```python
 ScheduleSpace(
-    entities: Sequence[Hashable],          # cut-set decision vars
-    slots: int,                            # T time slots
-    graph: networkx.Graph | None = None,   # optional grid topology
-    downstream: Callable[[entity], Iterable[leaf]] | None = None,
+    entities: Sequence[Hashable],
+    slots: int,
+    downstream: Callable[[Hashable], Iterable[Hashable]] | None = None,
+    penalty: float = 1e3,
 )
 ```
 
@@ -100,14 +102,16 @@ ScheduleSpace(
   cut-set), not individual customers.
 - `slots` is the horizon T. Slot semantics (hour, 15-minute interval,
   day) are user-defined; ScheduleSpace treats them as opaque indices.
-- `graph` is optional and used only for fairness expansion. When omitted,
-  fairness is computed over `entities` directly.
-- `downstream(entity) → leaves` maps each entity to the set of nodes whose
-  experience of blackout is determined by that entity's on/off state.
-  When `graph` is provided and `downstream` is omitted, ScheduleSpace
-  derives `downstream` as the set of `graph` nodes reachable from the
-  entity once all *other* entities are cut. This is a one-time
-  preprocessing step at `ScheduleSpace.__init__`.
+- `downstream(entity) → leaves` maps each entity to the set of leaf nodes
+  whose experience of blackout is determined by that entity's on/off
+  state. Optional — when omitted, fairness is computed over `entities`
+  directly (each entity is its own leaf). Topology is the *user's*
+  problem: if they have a networkx graph, they pass
+  `downstream=lambda e: nx.descendants(g, e) & leaves`. ScheduleSpace
+  never imports networkx.
+- `penalty` is the `λ` capacity-violation weight folded into
+  `_evaluate`. Default `1e3`. Configurable so users can tune away from
+  fairness-vs-feasibility imbalances.
 
 ### Decorators (capabilities the user attaches)
 
@@ -121,8 +125,8 @@ def capacity(slot) -> float:
     """Per-slot total capacity. Required."""
 
 @space.fairness
-def fairness(schedule: np.ndarray) -> float:
-    """Scalar to MAXIMISE. schedule is (T, N) bool. Required."""
+def fairness(schedule: tuple[tuple[bool, ...], ...]) -> float:
+    """Scalar to MAXIMISE. schedule is (T, N) tuple-of-tuples of bool. Required."""
 ```
 
 All three decorators are required. The auto-solver raises a clear error at
@@ -238,13 +242,15 @@ from pathos.fairness import weighted_minmax
 def weighted_minmax(
     weights: Mapping[Hashable, float],
     space: ScheduleSpace,
-) -> Callable[[np.ndarray], float]:
+) -> Callable[[tuple[tuple[bool, ...], ...]], float]:
     """Returns a fairness callable bound to `space`.
 
-    The returned function takes a (T, N) bool schedule and returns
+    The returned function takes a (T, N) tuple-of-tuples schedule and
+    returns
         min over leaves of  weights[leaf] * uptime_fraction(leaf, schedule)
-    where uptime_fraction(leaf, schedule) is the share of slots in which the
-    entity feeding `leaf` (per space.downstream) was on. Higher = fairer.
+    where uptime_fraction(leaf, schedule) is the share of slots in which
+    the entity feeding `leaf` (per space.downstream) was on. Higher =
+    fairer.
 
     `weights` keys should cover every leaf the user cares about; missing
     leaves are skipped (treated as fully tolerant).
@@ -256,45 +262,56 @@ The helper is the **only** built-in fairness function in v1. Other shapes
 
 ## API in full — worked example
 
+The example uses only stdlib + pathos. Users with networkx pass
+`downstream` directly; the library doesn't import it.
+
 ```python
-import numpy as np
-import networkx as nx
+import random
 from pathos import ScheduleSpace
 from pathos.fairness import weighted_minmax
 
-# Synthetic grid: 20 substations on a small radial topology
-grid = nx.balanced_tree(r=3, h=3)
-substations = [n for n in grid.nodes if grid.degree(n) > 1]
-leaves = [n for n in grid.nodes if grid.degree(n) == 1]
-priority = {leaf: np.random.choice([0.0, 0.5, 1.0]) for leaf in leaves}
+rng = random.Random(42)
+
+# Synthetic 4-level radial: 20 substations feeding ~60 leaves
+substations = [f"sub_{i}" for i in range(20)]
+leaves_per_sub = {s: [f"{s}_leaf_{j}" for j in range(rng.randint(2, 4))]
+                  for s in substations}
+all_leaves = [leaf for leaves in leaves_per_sub.values() for leaf in leaves]
+priority = {leaf: rng.choice([0.0, 0.5, 1.0]) for leaf in all_leaves}
 # 0.0 = critical (hospital), 0.5 = industrial, 1.0 = residential
 
 space = (
-    ScheduleSpace(entities=substations, slots=168, graph=grid)
+    ScheduleSpace(
+        entities=substations,
+        slots=168,
+        downstream=lambda s: leaves_per_sub[s],
+        penalty=1e3,
+    )
     .target(tolerance=0.05)
+    .mode("auto")
 )
+
+base_load = {(s, t): rng.uniform(50, 150) for s in substations for t in range(168)}
+supply = [sum(base_load[s, t] for s in substations) * 0.7 for t in range(168)]
 
 @space.demand
 def demand(sub, slot):
-    return base_load[sub][slot]   # kW, deterministic forecast
+    return base_load[sub, slot]
 
 @space.capacity
 def capacity(slot):
-    return available_supply[slot]  # kW, total power available this slot
+    return supply[slot]
 
 @space.fairness
 def fairness(schedule):
-    # schedule: (168, 20) bool — True = substation is on
-    # weighted_minmax returns a closure bound to `space`, which provides
-    # the entity → downstream leaves mapping internally.
     return weighted_minmax(priority, space)(schedule)
 
-result = space.solver().solve()
+result = space.solver(timeout=5).solve()
 
 assert result.found
 print(f"Algorithm: {result.algorithm}")          # "AnytimeLocal"
 print(f"Best objective (-fairness + λ·violations): {result.cost:.3f}")
-print(f"Slack per slot: {result.slack.mean():.1f} kW avg headroom")
+print(f"Mean slack: {sum(result.slack) / len(result.slack):.1f} kW")
 ```
 
 ## Error handling
@@ -304,10 +321,9 @@ print(f"Slack per slot: {result.slack.mean():.1f} kW avg headroom")
 | Missing `@demand`, `@capacity`, or `@fairness` at `solver()` time | `RuntimeError` naming the missing decorator. |
 | Decorator attached twice (same space) | `RuntimeError("@demand already defined on this space")`. |
 | `tolerance` outside `[0, 1]` | `ValueError` in `.target()`. |
-| `entities` contains node not in `graph` (when `graph` provided) | `ValueError` at `__init__`. |
-| `capacity(t)` returns negative value | `ValueError` at first evaluation; surfaces in solve. |
-| Infeasible problem (no schedule satisfies capacity even with all-off — e.g., demand=0 but lower band requires load>0) | `SearchResult(found=False)` with `cost=None`; `algorithm` still names what tried. |
-| `target()` band tightens to infeasibility | `UserWarning`, fall back to upper-bound-only constraint. |
+| `slots <= 0` or empty `entities` | `ValueError` at `__init__`. |
+| `capacity(t)` returns negative value | `ValueError` at first evaluation. |
+| Infeasible problem at the chosen `penalty` (returned schedule has capacity overshoot) | `result.found` is still True but `result.cost` includes the `λ·violations` term; the caller must verify feasibility via `result.slack` (negative entries = overshoot). The test suite exercises this path. |
 
 ## Testing strategy
 
