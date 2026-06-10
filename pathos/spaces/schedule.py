@@ -41,3 +41,34 @@ class ScheduleSpace(Space):
         self._fairness_fn: Callable[[tuple[tuple[bool, ...], ...]], float] | None = None
         # Target band, set via .target(). Default: upper bound only.
         self._tolerance: float = 0.0
+
+    # --- decorator hooks ---
+
+    @property
+    def demand(self) -> Callable[..., Any]:
+        def decorator(fn: Callable[..., float]) -> Callable[..., float]:
+            if self._demand_fn is not None:
+                raise RuntimeError("@demand already defined on this space")
+            self._demand_fn = fn
+            return fn
+        return decorator
+
+    @property
+    def capacity(self) -> Callable[..., Any]:
+        def decorator(fn: Callable[..., float]) -> Callable[..., float]:
+            if self._capacity_fn is not None:
+                raise RuntimeError("@capacity already defined on this space")
+            self._capacity_fn = fn
+            return fn
+        return decorator
+
+    @property
+    def fairness(self) -> Callable[..., Any]:
+        from pathos.core.capabilities import Capability
+        def decorator(fn: Callable[..., float]) -> Callable[..., float]:
+            if self._fairness_fn is not None:
+                raise RuntimeError("@fairness already defined on this space")
+            self._fairness_fn = fn
+            self.capabilities.add(Capability.EVALUATE)
+            return fn
+        return decorator
