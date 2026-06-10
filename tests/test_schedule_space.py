@@ -162,3 +162,66 @@ def test_successors_capability_emitted_after_demand_capacity_fairness():
     s = ScheduleSpace(entities=["a"], slots=2)
     _attach_demand_capacity_fairness(s)
     assert Capability.SUCCESSORS in s.capabilities
+
+
+def test_evaluate_pure_fairness_when_feasible():
+    s = ScheduleSpace(entities=["a", "b"], slots=2, penalty=1e3)
+    @s.demand
+    def _d(e, t): return 1.0
+    @s.capacity
+    def _c(t): return 10.0    # huge, never violated
+    @s.fairness
+    def _f(schedule): return 0.42
+    state = frozenset({(0, 0), (1, 1)})
+    # fairness = 0.42, no violation -> _evaluate = -0.42
+    assert s._evaluate(state) == pytest.approx(-0.42)
+
+
+def test_evaluate_penalises_capacity_overshoot():
+    s = ScheduleSpace(entities=["a", "b"], slots=1, penalty=1e3)
+    @s.demand
+    def _d(e, t): return 5.0
+    @s.capacity
+    def _c(t): return 3.0     # any single entity ON overshoots by 2
+    @s.fairness
+    def _f(schedule): return 0.0
+    state = frozenset({(0, 0)})   # one entity ON, demand=5, cap=3 -> overshoot=2
+    # _evaluate = -0 + 1000*2 = 2000
+    assert s._evaluate(state) == pytest.approx(2000.0)
+
+
+def test_evaluate_overshoot_summed_across_slots():
+    s = ScheduleSpace(entities=["a"], slots=3, penalty=10.0)
+    @s.demand
+    def _d(e, t): return 5.0
+    @s.capacity
+    def _c(t): return 3.0    # overshoot=2 per slot with entity ON
+    @s.fairness
+    def _f(schedule): return 0.0
+    state = frozenset({(0, 0), (1, 0), (2, 0)})  # ON every slot
+    # overshoot = 2 + 2 + 2 = 6; _evaluate = 60.0
+    assert s._evaluate(state) == pytest.approx(60.0)
+
+
+def test_evaluate_off_slot_contributes_zero_overshoot():
+    s = ScheduleSpace(entities=["a"], slots=2, penalty=10.0)
+    @s.demand
+    def _d(e, t): return 5.0
+    @s.capacity
+    def _c(t): return 3.0
+    @s.fairness
+    def _f(schedule): return 0.0
+    state = frozenset()  # all off, no demand, no overshoot
+    assert s._evaluate(state) == pytest.approx(0.0)
+
+
+def test_evaluate_rejects_negative_capacity():
+    s = ScheduleSpace(entities=["a"], slots=1)
+    @s.demand
+    def _d(e, t): return 1.0
+    @s.capacity
+    def _c(t): return -1.0
+    @s.fairness
+    def _f(schedule): return 0.0
+    with pytest.raises(ValueError, match="capacity"):
+        s._evaluate(frozenset())

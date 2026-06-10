@@ -71,10 +71,40 @@ class ScheduleSpace(Space):
             if self._fairness_fn is not None:
                 raise RuntimeError("@fairness already defined on this space")
             self._fairness_fn = fn
+
+            def _evaluate(state: frozenset[tuple[int, int]]) -> float:
+                matrix = self._to_matrix(state)
+                fairness_score = self._fairness_fn(matrix)
+                overshoot = self._overshoot(state)
+                return -float(fairness_score) + self._penalty * overshoot
+
+            self._evaluate = _evaluate
             self.capabilities.add(Capability.EVALUATE)
             self._maybe_finalize()
             return fn
         return decorator
+
+    def _overshoot(self, state: frozenset[tuple[int, int]]) -> float:
+        """Total capacity-violation overshoot summed across slots.
+
+        For each slot, compute (load - capacity) and clip below at 0.
+        Lower band from .target() is layered in by Task 6.
+        """
+        if self._demand_fn is None or self._capacity_fn is None:
+            return 0.0
+        total = 0.0
+        for t in range(self._slots):
+            cap_t = self._capacity_fn(t)
+            if cap_t < 0:
+                raise ValueError(
+                    f"@capacity returned negative value {cap_t} at slot {t}",
+                )
+            load_t = sum(
+                self._demand_fn(self._entities[e], t)
+                for tt, e in state if tt == t
+            )
+            total += max(0.0, load_t - cap_t)
+        return total
 
     # --- internal helpers ---
 
