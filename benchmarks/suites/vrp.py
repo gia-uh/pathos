@@ -93,3 +93,113 @@ register(SuiteSpec(
     budgets={"S": 10.0, "M": 30.0, "L": 150.0},
     notes="Capacitated VRP via tour with depot-copy boundaries; penalty-fold cap.",
 ))
+
+
+# ---------------------------------------------------------------------------
+# R4 — VRP with time windows (missing-capability suite)
+# ---------------------------------------------------------------------------
+
+@dataclass(frozen=True)
+class VRPTWInstance:
+    customers: tuple[tuple[float, float], ...]
+    demands: tuple[float, ...]
+    time_windows: tuple[tuple[float, float], ...]  # per customer
+    service_time: float
+    n_vehicles: int
+    vehicle_capacity: float
+    depot: tuple[float, float]
+
+
+def _generate_tw(size: int, seed: int) -> VRPTWInstance:
+    rng = random.Random(seed)
+    base = _generate(size, seed)
+    # Synthesize windows on top of the base capacitated instance.
+    horizon = 24.0 * 60.0  # 24h in minutes
+    windows: list[tuple[float, float]] = []
+    for _ in range(size):
+        start = rng.uniform(0.0, horizon * 0.75)
+        width = rng.uniform(horizon * 0.05, horizon * 0.25)
+        windows.append((start, min(horizon, start + width)))
+    return VRPTWInstance(
+        customers=base.customers,
+        demands=base.demands,
+        time_windows=tuple(windows),
+        service_time=5.0,
+        n_vehicles=base.n_vehicles,
+        vehicle_capacity=base.vehicle_capacity,
+        depot=base.depot,
+    )
+
+
+def _express_tw(inst: VRPTWInstance) -> TourSpace:
+    # Build the same TourSpace as R3, then layer a window penalty on top
+    # of the existing @evaluate. Because @evaluate is a single function,
+    # we rebuild from scratch and combine both penalties inline.
+    n_cust = len(inst.customers)
+    depot_ids = list(range(inst.n_vehicles))
+    cust_ids = list(range(inst.n_vehicles, inst.n_vehicles + n_cust))
+    nodes = depot_ids + cust_ids
+
+    def coord(node_id: int) -> tuple[float, float]:
+        if node_id < inst.n_vehicles:
+            return inst.depot
+        return inst.customers[node_id - inst.n_vehicles]
+
+    distances = {
+        (i, j): _dist(coord(i), coord(j))
+        for i in nodes for j in nodes if i != j
+    }
+    space = TourSpace(nodes=nodes, distances=distances)
+    speed = 1.0  # 1 distance-unit per minute (fast/synthetic)
+
+    @space.evaluate
+    def cost(tour: tuple[int, ...]) -> float:
+        base = sum(
+            distances[(tour[i], tour[(i + 1) % len(tour)])]
+            for i in range(len(tour))
+        )
+        # Walk + accumulate vehicle load + per-vehicle time clock.
+        loads: list[float] = []
+        cur_load = 0.0
+        clock = 0.0
+        window_overshoot = 0.0
+        prev = tour[0]
+        for node in tour:
+            if node != prev:
+                clock += distances[(prev, node)] / speed
+            if node < inst.n_vehicles:
+                loads.append(cur_load)
+                cur_load = 0.0
+                clock = 0.0
+            else:
+                idx = node - inst.n_vehicles
+                a, b = inst.time_windows[idx]
+                if clock < a:
+                    clock = a  # wait at door, no penalty
+                elif clock > b:
+                    window_overshoot += clock - b
+                clock += inst.service_time
+                cur_load += inst.demands[idx]
+            prev = node
+        loads.append(cur_load)
+        cap_overshoot = sum(max(0.0, l - inst.vehicle_capacity) for l in loads)
+        return base + 1e3 * cap_overshoot + 1e3 * window_overshoot
+
+    return space
+
+
+register(SuiteSpec(
+    id="R4",
+    family="tour",
+    constraint_classes=frozenset({"i", "iii", "v"}),
+    expressibility="gap",
+    sizes={"S": (100,), "M": (300,), "L": (1000,)},
+    generate=_generate_tw,
+    express=_express_tw,
+    budgets={"S": 10.0, "M": 30.0, "L": 150.0},
+    missing_capability="time_windows",
+    notes=(
+        "VRP with time windows — TourSpace lacks first-class window "
+        "modeling; both capacity and window violations are penalty-folded."
+    ),
+))
