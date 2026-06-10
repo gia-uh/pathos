@@ -21,6 +21,9 @@ class SearchResult:
             inf = unbounded suboptimal (e.g. greedy),
             None = not applicable (e.g. metaheuristics with no quality bound,
             or not_found results).
+        slack: Per-slot residual capacity for ScheduleSpace solutions.
+            Negative entries indicate the penalty-folded local search
+            accepted an infeasible schedule. None for every other subspace.
     """
     solution: Any
     path: list[tuple[Any, Any]] | None
@@ -30,6 +33,7 @@ class SearchResult:
     elapsed: float
     found: bool
     epsilon: float | None = None
+    slack: list[float] | None = None
 
     @property
     def optimal(self) -> bool:
