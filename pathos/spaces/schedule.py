@@ -41,6 +41,7 @@ class ScheduleSpace(Space):
         self._fairness_fn: Callable[[tuple[tuple[bool, ...], ...]], float] | None = None
         # Target band, set via .target(). Default: upper bound only.
         self._tolerance: float = 0.0
+        self._k: int = 1
 
     # --- decorator hooks ---
 
@@ -104,6 +105,9 @@ class ScheduleSpace(Space):
                 for tt, e in state if tt == t
             )
             total += max(0.0, load_t - cap_t)
+            if self._tolerance > 0.0:
+                lower = cap_t * (1.0 - self._tolerance)
+                total += max(0.0, lower - load_t)
         return total
 
     # --- internal helpers ---
@@ -140,3 +144,19 @@ class ScheduleSpace(Space):
             and self._successors is None
         ):
             self._setup_successors()
+
+    # --- fluent builders ---
+
+    def target(self, tolerance: float) -> "ScheduleSpace":
+        if not 0.0 <= tolerance <= 1.0:
+            raise ValueError(
+                f"tolerance must be in [0, 1], got {tolerance}"
+            )
+        self._tolerance = tolerance
+        return self
+
+    def neighborhood(self, k: int) -> "ScheduleSpace":
+        if k < 1:
+            raise ValueError(f"k must be >= 1, got {k}")
+        self._k = k
+        return self

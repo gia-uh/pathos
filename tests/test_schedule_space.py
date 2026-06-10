@@ -225,3 +225,64 @@ def test_evaluate_rejects_negative_capacity():
     def _f(schedule): return 0.0
     with pytest.raises(ValueError, match="capacity"):
         s._evaluate(frozenset())
+
+
+def test_target_default_is_zero_tolerance():
+    s = ScheduleSpace(entities=["a"], slots=1)
+    assert s._tolerance == 0.0
+
+
+def test_target_sets_tolerance():
+    s = ScheduleSpace(entities=["a"], slots=1).target(tolerance=0.1)
+    assert s._tolerance == 0.1
+
+
+def test_target_returns_self_for_chaining():
+    s = ScheduleSpace(entities=["a"], slots=1)
+    assert s.target(tolerance=0.05) is s
+
+
+def test_target_rejects_tolerance_below_0():
+    s = ScheduleSpace(entities=["a"], slots=1)
+    with pytest.raises(ValueError, match="tolerance"):
+        s.target(tolerance=-0.1)
+
+
+def test_target_rejects_tolerance_above_1():
+    s = ScheduleSpace(entities=["a"], slots=1)
+    with pytest.raises(ValueError, match="tolerance"):
+        s.target(tolerance=1.5)
+
+
+def test_target_lower_band_penalises_under_use():
+    s = ScheduleSpace(entities=["a"], slots=1, penalty=10.0).target(tolerance=0.5)
+    @s.demand
+    def _d(e, t): return 5.0
+    @s.capacity
+    def _c(t): return 10.0    # tolerance=0.5 -> lower band = 5.0
+    @s.fairness
+    def _f(schedule): return 0.0
+    state = frozenset()  # load=0, lower band undershoots by 5
+    # _evaluate = -0 + 10 * 5 = 50
+    assert s._evaluate(state) == pytest.approx(50.0)
+
+
+def test_neighborhood_default_is_1():
+    s = ScheduleSpace(entities=["a"], slots=1)
+    assert s._k == 1
+
+
+def test_neighborhood_sets_k():
+    s = ScheduleSpace(entities=["a"], slots=1).neighborhood(k=2)
+    assert s._k == 2
+
+
+def test_neighborhood_returns_self_for_chaining():
+    s = ScheduleSpace(entities=["a"], slots=1)
+    assert s.neighborhood(k=2) is s
+
+
+def test_neighborhood_rejects_k_below_1():
+    s = ScheduleSpace(entities=["a"], slots=1)
+    with pytest.raises(ValueError, match="k"):
+        s.neighborhood(k=0)
