@@ -225,12 +225,33 @@ class AnytimeLocal(Algorithm):
     def solve(self) -> SearchResult:
         t0 = time.perf_counter()
         best: SearchResult | None = None
-        for alg_cls, kwargs in self.SCHEDULE:
-            if self.space._cancel_requested():
-                break
-            phase_result = alg_cls(self.space, **kwargs).solve()
-            if self._is_better(phase_result, best):
-                best = phase_result
+        total_deadline: float | None = getattr(self.space, "_deadline_at", None)
+        n_phases = len(self.SCHEDULE)
+        try:
+            for i, (alg_cls, kwargs) in enumerate(self.SCHEDULE):
+                if self.space._cancel_requested():
+                    break
+                # Allocate per-phase wall-clock: split remaining time evenly
+                # across remaining phases so a slow first phase can't
+                # monopolise the global budget (R1/R2 bench failure mode).
+                if total_deadline is not None:
+                    now = time.perf_counter()
+                    remaining = total_deadline - now
+                    if remaining <= 0:
+                        break
+                    phases_left = n_phases - i
+                    phase_budget = remaining / phases_left
+                    self.space._phase_deadline_at = now + phase_budget
+                try:
+                    phase_result = alg_cls(self.space, **kwargs).solve()
+                    if self._is_better(phase_result, best):
+                        best = phase_result
+                finally:
+                    self.space._phase_deadline_at = None
+        except TimeoutError:
+            # Watchdog raised inside a phase before it observed the
+            # cancel token. Preserve incumbent from earlier phases.
+            pass
         if best is None:
             return SearchResult.not_found(
                 "AnytimeLocal", 0, time.perf_counter() - t0,

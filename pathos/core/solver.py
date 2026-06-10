@@ -109,6 +109,9 @@ class Solver:
         prev_secondary = signal.signal(signal.SIGVTALRM, signal.SIG_IGN)
         signal.setitimer(signal.ITIMER_REAL, self.timeout)
         t0 = time.perf_counter()
+        # Publish the total deadline so meta-algorithms can divide it
+        # across phases. None-clearing happens in finally.
+        self.space._deadline_at = t0 + self.timeout
         try:
             return cls(self.space).solve()
         except TimeoutError:
@@ -120,6 +123,8 @@ class Solver:
             signal.setitimer(signal.ITIMER_VIRTUAL, 0)
             signal.signal(signal.SIGALRM, prev_primary)
             signal.signal(signal.SIGVTALRM, prev_secondary)
+            self.space._deadline_at = None
+            self.space._phase_deadline_at = None
             # Reset cancel token for any future solver call on this space.
             from pathos.core.cancel import CancelToken
             self.space._cancel_token = CancelToken()

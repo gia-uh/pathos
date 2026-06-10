@@ -33,6 +33,15 @@ class Space:
         self._timeout: float | None = None
         self._mode: Mode = "auto"
         self._cancel_token: CancelToken = CancelToken()
+        # Total wall-clock deadline (perf_counter() basis) set by Solver
+        # when a timeout is given. Meta-algorithms read it to allocate
+        # per-phase budgets without needing to know the timeout themselves.
+        self._deadline_at: float | None = None
+        # Per-phase deadline installed by meta-algorithms (e.g. AnytimeLocal)
+        # so cooperating phases break early via `_cancel_requested()`. None
+        # means no phase-level deadline; only the cancel token / global
+        # deadline apply.
+        self._phase_deadline_at: float | None = None
         self._n_workers: int = 1
         self._adversarial: bool = False
         self._players: int = 2
@@ -96,7 +105,13 @@ class Space:
     # --- cancel-token wire (used by Solver + algorithm solve loops) ---
 
     def _cancel_requested(self) -> bool:
-        return self._cancel_token.is_set()
+        if self._cancel_token.is_set():
+            return True
+        if self._phase_deadline_at is not None:
+            import time
+            if time.perf_counter() >= self._phase_deadline_at:
+                return True
+        return False
 
     def _request_cancel(self) -> None:
         self._cancel_token.request_cancel()
