@@ -25,6 +25,9 @@ def build_report(rows: list[RunRow], meta: dict[str, str]) -> Report:
         head_alg = (head[0].algorithm if head else "—")
         oracle_alg, oracle_cost = oracle_row(group)
         gap = gap_pct(head_cost, oracle_cost)
+        lb_rows = [r for r in group if r.mode == "lower_bound"]
+        lb_value = median_cost(lb_rows)
+        gap_lb = gap_pct(head_cost, lb_value)
         tg, tg_alg = tunability_gain(group)
         spec = SUITE_REGISTRY.get(suite)
         mc = spec.missing_capability if spec is not None else None
@@ -38,7 +41,7 @@ def build_report(rows: list[RunRow], meta: dict[str, str]) -> Report:
             oracle_cost=oracle_cost,
             oracle_algorithm=oracle_alg,
             gap_to_oracle_pct=gap,
-            gap_to_lb_pct=None,  # TODO Task 13 hook LB into runner output
+            gap_to_lb_pct=gap_lb,
             tunability_gain_pct=tg,
             tunability_algorithm=tg_alg,
             missing_capability=mc,

@@ -7,6 +7,7 @@ import pathos.algorithms  # noqa: F401 — register algorithms
 from pathos import TourSpace
 from benchmarks.suites import register
 from benchmarks.suites._spec import SuiteSpec
+from benchmarks.realistic.lower_bounds import tsp_one_tree_lb
 
 
 @dataclass(frozen=True)
@@ -82,6 +83,17 @@ def _express(inst: VRPInstance) -> TourSpace:
     return _build_tour_space(inst)
 
 
+def _r3_lb(inst: VRPInstance) -> float:
+    """1-tree LB on the underlying TSP over customers + depot."""
+    nodes = list(range(len(inst.customers) + 1))  # 0 = depot
+    coords = [inst.depot] + list(inst.customers)
+    distances = {
+        (i, j): _dist(coords[i], coords[j])
+        for i in nodes for j in nodes if i != j
+    }
+    return float(tsp_one_tree_lb(nodes=nodes, distances=distances))
+
+
 register(SuiteSpec(
     id="R3",
     family="tour",
@@ -91,6 +103,7 @@ register(SuiteSpec(
     generate=_generate,
     express=_express,
     budgets={"S": 10.0, "M": 30.0, "L": 150.0},
+    lower_bound=_r3_lb,
     notes="Capacitated VRP via tour with depot-copy boundaries; penalty-fold cap.",
 ))
 

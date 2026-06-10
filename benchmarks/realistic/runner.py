@@ -26,6 +26,7 @@ class RunConfig:
     oracle: bool = True
     stress_multiplier: float = 5.0
     base_seed: int = 42
+    budget_scale: float = 1.0
 
 
 def _solve_and_record(
@@ -111,7 +112,7 @@ def run_one(suite_id: str, tier: str, cfg: RunConfig) -> list[RunRow]:
     if tier not in spec.sizes:
         return []
     rows: list[RunRow] = []
-    budget = spec.budgets[tier]
+    budget = spec.budgets[tier] * cfg.budget_scale
     for size_payload in spec.sizes[tier]:
         for r in range(cfg.seeds):
             seed = cfg.base_seed + r
@@ -141,6 +142,17 @@ def run_one(suite_id: str, tier: str, cfg: RunConfig) -> list[RunRow]:
                         f"oracle_{algo_name}", algo_name,
                         oracle_space, budget, spec.missing_capability,
                     ))
+            if spec.lower_bound is not None:
+                lb_value = spec.lower_bound(inst)
+                rows.append(RunRow(
+                    suite=suite_id,
+                    size=_size_to_int(size_payload),
+                    seed=seed, mode="lower_bound",
+                    algorithm="lb",
+                    cost=float(lb_value), feasible=True,
+                    elapsed=0.0, nodes_expanded=0,
+                    missing_capability=spec.missing_capability,
+                ))
     return rows
 
 

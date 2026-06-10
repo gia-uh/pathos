@@ -83,11 +83,17 @@ def main() -> int:
             return False
         return tier in ("S", "M")
 
+    # Quick mode trims wall-clock so the smoke test fits in ~60s:
+    # budgets scaled to 1/10, stress only 2x headline.
+    budget_scale = 0.1 if args.quick else 1.0
+    stress_mult = 2.0 if args.quick else 5.0
+
     rows = []
     for tier in tiers:
         cfg = RunConfig(
             seeds=args.repeat, oracle=_oracle_for(tier),
-            stress_multiplier=5.0, base_seed=args.seed,
+            stress_multiplier=stress_mult, base_seed=args.seed,
+            budget_scale=budget_scale,
         )
         rows.extend(run_sweep(suite_ids, [tier], cfg))
 
