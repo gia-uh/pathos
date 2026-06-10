@@ -333,19 +333,6 @@ def test_solver_slack_reflects_capacity_minus_load():
     assert result.slack[0] in (pytest.approx(8.0), pytest.approx(10.0))
 
 
-@pytest.mark.xfail(
-    strict=False,
-    reason=(
-        "AnytimeLocal cascade vaporizes its incumbent when the watchdog "
-        "TimeoutError fires mid-phase on large ScheduleSpace problems — "
-        "HC monopolises the budget, SA never runs, the Solver returns "
-        "not_found. Confirmed by R1/R2 in the realistic-bench REPORT "
-        "(2026-06-10) and by direct trace in .playground/pathos-r1-trace. "
-        "Slated for slice-2 (Anytime* budget honesty). Passes on fast "
-        "CPUs where HC finishes a restart in time, fails on slow CI "
-        "runners — hence non-strict."
-    ),
-)
 def test_example_power_grid_runs_end_to_end():
     """Smoke: the example runs, picks AnytimeLocal, returns a feasible
     schedule. Locks no exact float values; catches API drift only."""
