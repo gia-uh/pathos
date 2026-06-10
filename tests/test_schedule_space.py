@@ -286,3 +286,48 @@ def test_neighborhood_rejects_k_below_1():
     s = ScheduleSpace(entities=["a"], slots=1)
     with pytest.raises(ValueError, match="k"):
         s.neighborhood(k=0)
+
+
+import dataclasses
+import pathos.algorithms  # noqa: F401 — ensure registry populated
+from pathos import ScheduleSpace as _PublicScheduleSpace  # re-export check
+from pathos.spaces.schedule import ScheduleSpace as _PrivateScheduleSpace
+
+
+def test_schedule_space_re_exported_at_top_level():
+    assert _PublicScheduleSpace is _PrivateScheduleSpace
+
+
+def test_solver_returns_matrix_solution_and_slack_for_feasible_problem():
+    s = ScheduleSpace(entities=["a"], slots=2, penalty=1e3)
+    @s.demand
+    def _d(e, t): return 1.0
+    @s.capacity
+    def _c(t): return 5.0   # huge headroom
+    @s.fairness
+    def _f(schedule): return 0.5
+    result = s.solver(timeout=2).solve()
+    assert result.found
+    # solution is a (T, N) tuple-of-tuples, not a frozenset
+    assert isinstance(result.solution, tuple)
+    assert len(result.solution) == 2
+    assert all(isinstance(row, tuple) for row in result.solution)
+    # slack is a per-slot list, one entry per slot
+    assert result.slack is not None
+    assert len(result.slack) == 2
+
+
+def test_solver_slack_reflects_capacity_minus_load():
+    s = ScheduleSpace(entities=["a"], slots=1, penalty=1e3)
+    @s.demand
+    def _d(e, t): return 2.0
+    @s.capacity
+    def _c(t): return 10.0
+    @s.fairness
+    def _f(schedule):
+        # ON => uptime fraction 1; prefer ON
+        return float(schedule[0][0])
+    result = s.solver(timeout=2).solve()
+    assert result.found
+    # If the algorithm chose ON: slack = 10 - 2 = 8; if OFF: slack = 10
+    assert result.slack[0] in (pytest.approx(8.0), pytest.approx(10.0))

@@ -160,3 +160,38 @@ class ScheduleSpace(Space):
             raise ValueError(f"k must be >= 1, got {k}")
         self._k = k
         return self
+
+    # --- solver factory override: wrap result with matrix solution + slack ---
+
+    def solver(
+        self,
+        candidates: list[Any] | None = None,
+        timeout: float | None = None,
+        mode: Any = None,
+    ) -> Any:
+        import dataclasses
+        inner = super().solver(candidates=candidates, timeout=timeout, mode=mode)
+        space = self
+
+        class _ScheduleSolver:
+            def __init__(self, inner_solver: Any) -> None:
+                self._inner = inner_solver
+
+            def solve(self) -> Any:
+                raw = self._inner.solve()
+                if not raw.found:
+                    return raw
+                state = raw.solution
+                # Build slack per slot: capacity[t] - load[t]
+                slack: list[float] = []
+                for t in range(space._slots):
+                    cap_t = space._capacity_fn(t)  # type: ignore[misc]
+                    load_t = sum(
+                        space._demand_fn(space._entities[e], t)  # type: ignore[misc]
+                        for tt, e in state if tt == t
+                    )
+                    slack.append(cap_t - load_t)
+                matrix = space._to_matrix(state)
+                return dataclasses.replace(raw, solution=matrix, slack=slack)
+
+        return _ScheduleSolver(inner)
