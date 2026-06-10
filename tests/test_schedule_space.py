@@ -331,3 +331,25 @@ def test_solver_slack_reflects_capacity_minus_load():
     assert result.found
     # If the algorithm chose ON: slack = 10 - 2 = 8; if OFF: slack = 10
     assert result.slack[0] in (pytest.approx(8.0), pytest.approx(10.0))
+
+
+def test_example_power_grid_runs_end_to_end():
+    """Smoke: the example runs, picks AnytimeLocal, returns a feasible
+    schedule. Locks no exact float values; catches API drift only."""
+    import importlib.util
+    import pathlib
+    repo_root = pathlib.Path(__file__).resolve().parents[1]
+    example_path = repo_root / "examples" / "power_grid.py"
+    assert example_path.exists(), f"Missing example at {example_path}"
+    spec = importlib.util.spec_from_file_location("power_grid_example", example_path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    result = module.run()
+    assert result.found
+    assert result.algorithm == "AnytimeLocal"
+    # All slots should be feasible (slack >= 0) after the AnytimeLocal cascade.
+    assert result.slack is not None
+    assert all(s >= -1e-6 for s in result.slack), (
+        f"Infeasible schedule returned: slack min = {min(result.slack)}"
+    )
