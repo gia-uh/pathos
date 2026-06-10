@@ -32,10 +32,11 @@ the constraint structure that lets CSP algorithms shine.
   existing subspaces.
 - Model one-shot discrete scheduling: decision variable is the full T×N
   binary matrix (slots × entities), produced in a single solve.
-- Emit a capability set rich enough that the auto-solver picks meaningfully
-  across small / medium / large regimes — Backtracking, Min-Conflicts,
-  Simulated Annealing, Tabu Search, Local Beam, GA, DE all eligible.
-- Reuse the **`AnytimeCSP`** cascade that shipped in v0.2.0 — no new
+- Emit `{EVALUATE, SUCCESSORS}` so the local-search /
+  metaheuristic family — HillClimbing, SimulatedAnnealing, TabuSearch,
+  LocalBeamSearch, GA, DE — is eligible.
+- Reuse the **`AnytimeLocal`** cascade `[HillClimbing,
+  SimulatedAnnealing, TabuSearch]` that shipped in v0.2.0 — no new
   meta-algorithm.
 - Ship one batteries-included fairness helper (`weighted_minmax`) and keep
   the `@fairness` decorator open so users provide arbitrary scalar objectives.
@@ -51,21 +52,37 @@ the constraint structure that lets CSP algorithms shine.
 - A built-in fairness library beyond `weighted_minmax`. Gini, variance,
   Jain's index, etc. are one-line callables the user can hand-roll inside
   `@fairness`.
+- **CSP-family compatibility.** `Backtracking`, `ForwardChecking`,
+  `MinConflicts`, and `AnytimeCSP` are gated by `_is_csp_shaped(space)`
+  (`isinstance(space._initial, dict)` in `pathos/algorithms/csp.py:13`),
+  which expects partial-assignment dicts. ScheduleSpace's state is a
+  hashable wrapper over the complete schedule, not a partial assignment,
+  so those algorithms reject it cleanly. v1 ships with capacity violations
+  folded into `_evaluate` as a penalty term, not surfaced via the
+  `CONSTRAINTS` capability. Native CSP-family compatibility (`MinConflicts`
+  on `ScheduleSpace`, explicit `@constraint` capability with pruning) is
+  v1.1 work — see "Open questions" below.
 
 ## Architecture
 
 ### State representation
 
-A `ScheduleSpace` state is a `numpy.ndarray` of shape `(T, N)` with dtype
-`bool`. Row `t` is the on/off vector for slot `t`; column `e` is the
-on/off vector for entity `e` across the horizon. `True` = on, `False` =
-blacked out.
+A `ScheduleSpace` state is a `frozenset[tuple[int, int]]` — the set of
+`(slot, entity_index)` cells that are **on**. Stdlib-only, hashable,
+equality-comparable. This shape is required because `TabuSearch` keeps a
+tabu list and does `child not in tabu` (`pathos/algorithms/local.py:120`);
+raw `numpy.ndarray` instances raise on equality-in-list. A frozenset
+gives O(1) membership, O(1) hashing on cached `hash`, and dirt-cheap
+"flip one cell" via `s ^ {(t, e)}`.
 
-NumPy under the hood because every fairness/capacity computation is a
-vectorisable reduction. The capability layer exposes the matrix as the
-solution; algorithm internals may convert to per-variable representations
-where needed (e.g., Min-Conflicts uses a flat `T·N`-length variable list
-indexed `(t, e) → t·N + e`).
+NumPy is used internally for fairness/capacity arithmetic: the helper
+`ScheduleSpace._to_array(state) -> np.ndarray` converts the frozenset to
+a `(T, N)` bool ndarray on demand. Fairness callables receive the ndarray
+form (clean for the user), while algorithms see the frozenset (cheap to
+hash and copy).
+
+The returned `SearchResult.solution` is the **ndarray form** of the final
+state — users get a `(T, N)` bool matrix, not a frozenset.
 
 ### Constructor
 
@@ -130,29 +147,45 @@ Both return `self` (fluent chaining).
 
 | User decorator / builder | Emitted capability | Algorithms unlocked |
 |---|---|---|
-| `@demand` + `@capacity` (+ `.target()`) | `constraints` (per-slot capacity bound, optionally with lower band) | Backtracking, Forward Checking, AC-3, Min-Conflicts |
-| `@fairness` | `evaluate` | Hill Climbing, SA, Tabu, Local Beam, GA, DE, Random Search |
-| Built-in (from constructor) | `variables` (T·N binary) | (CSP family enabler) |
-| Built-in | `domains` ({0,1}) | (CSP family enabler) |
-| Built-in (via `.neighborhood(k)`) | `successors` (k-bit-flip neighborhood, default k=1) | Hill Climbing, SA, Tabu, Local Beam |
+| `@fairness` (combined with `@demand` + `@capacity` + `.target()` internally) | `EVALUATE` — internal `_evaluate(state)` returns `-fairness(state) + λ · violations(state)` where `violations` is total capacity overshoot summed over slots. Lower is better; algorithms minimise. | HillClimbing, SimulatedAnnealing, TabuSearch, LocalBeamSearch, GA, DE, RandomSearch |
+| Built-in (via `.neighborhood(k)`) | `SUCCESSORS` — k-bit-flip neighborhood (default k=1) | (same list) |
 
-The emitted capability set is `{evaluate, constraints, variables, domains,
-successors}` — the richest of any existing subspace, by design.
+The emitted capability set is `{EVALUATE, SUCCESSORS}` — minimal and
+consumed by the entire local-search / metaheuristic family without
+modification.
+
+**No `GOAL`**: ScheduleSpace deliberately does not declare GOAL.
+`Solver._select` (`solver.py:50`) applies a goal-honoring filter when GOAL
+is present, which would exclude `AnytimeLocal` (whose `requires` doesn't
+include GOAL). Skipping GOAL keeps `AnytimeLocal` in the candidate pool.
+Capacity satisfaction is a property of the returned schedule that the
+user checks via `SearchResult.slack`, not a goal predicate.
+
+**`λ` (capacity penalty weight)** is configurable on the constructor
+(`penalty=`), default `1e3`. Large enough that any feasible schedule
+out-scores any infeasible one for realistic fairness values in `[0, 1]`,
+small enough that gradients near the feasible boundary stay informative.
 
 ## Auto-solver behaviour
 
-Selection runs the same `score_for(space)` machinery as v0.2.0. The new
-algorithm-side overrides for ScheduleSpace:
+ScheduleSpace declares `mode="auto"` by default (inherited from `Space`).
+Under `mode="auto"`, the auto-solver picks `AnytimeLocal` — already
+shipped in v0.2.0 at `pathos/algorithms/local.py:188`. Its cascade is
+`[HillClimbing(max_restarts=3), SimulatedAnnealing(max_iter=500, T0=100,
+cooling=0.99), TabuSearch(max_iter=200, tabu_size=20)]` and it returns
+the lowest-cost incumbent across all phases under the wall-clock budget.
 
-| Algorithm | `score_for(space)` rule |
-|---|---|
-| `Backtracking` + `ForwardChecking` | High when `T · N ≤ 200`. Exact; complete search of the 2^(T·N) space terminates fast in this regime regardless of demand/capacity numeric type. |
-| `MinConflicts` | High when `200 < T · N ≤ 10_000`. Capacity violations are the conflict count; bitmap-native. |
-| `SimulatedAnnealing`, `TabuSearch` | High when `T · N > 10_000` *or* when fairness is non-smooth (we cannot detect this generically — user can force via `solver(candidates=…)`). |
-| `GeneticAlgorithm`, `DifferentialEvolution` | Eligible but demoted (bitmap crossover gives poor signal on this objective). Available if the user forces them. |
-| `AnytimeCSP` (meta) | Wins under `mode="auto"` (the default). Cascade `[MinConflicts, Backtracking]`, returns best incumbent within budget. **Already shipped in v0.2.0 — no new code.** |
+No new meta-algorithm and no per-algorithm `score_for` overrides are
+needed for v1. The existing cascade adapts to budget naturally.
 
-The score thresholds (200, 10_000) are starting points based on rough order-of-magnitude reasoning — they will be tuned against the v1 example and any benchmarks added later.
+Users opting into `mode="exact"` or `mode="approximate"` get the base
+algorithm pick — typically `TabuSearch` (`power_rank=18`) above
+`LocalBeamSearch` (16) and `HillClimbing` (15). Users can still force
+`GA` or `DE` via `space.solver(candidates=[GeneticAlgorithm])`.
+
+**Out of scope for v1:** size-aware `score_for` thresholds (a sensible
+v1.1 once we have ScheduleSpace benchmarks to calibrate against). The
+v0.2.0 AnytimeLocal cascade is the v1 selection policy verbatim.
 
 ## SearchResult extensions
 
@@ -174,22 +207,23 @@ operators to see headroom per slot. Populated only by ScheduleSpace; remains
 
 ```
 pathos/
+  __init__.py            # MODIFIED — re-export ScheduleSpace
   spaces/
     schedule.py          # NEW — ScheduleSpace
   fairness.py            # NEW — weighted_minmax(weights, space) helper
   core/
     result.py            # MODIFIED — add optional `slack` field to SearchResult
-  algorithms/
-    csp.py               # MODIFIED — score_for overrides for ScheduleSpace
-    local.py             # MODIFIED — score_for overrides for ScheduleSpace
-    evolutionary.py      # MODIFIED — score_for demotion for ScheduleSpace
 
 examples/
   power_grid.py          # NEW — worked example on a synthetic grid
 
 tests/
   test_schedule_space.py # NEW — unit + property + integration tests
+  test_fairness.py       # NEW — weighted_minmax unit tests
 ```
+
+No algorithm files are touched. The existing AnytimeLocal cascade
+(HC → SA → Tabu) consumes ScheduleSpace verbatim.
 
 Top-level public API additions:
 
@@ -258,8 +292,8 @@ def fairness(schedule):
 result = space.solver().solve()
 
 assert result.found
-print(f"Algorithm: {result.algorithm}")          # likely "AnytimeCSP[MinConflicts]"
-print(f"Min weighted uptime: {-result.cost:.3f}")
+print(f"Algorithm: {result.algorithm}")          # "AnytimeLocal"
+print(f"Best objective (-fairness + λ·violations): {result.cost:.3f}")
 print(f"Slack per slot: {result.slack.mean():.1f} kW avg headroom")
 ```
 
@@ -278,7 +312,8 @@ print(f"Slack per slot: {result.slack.mean():.1f} kW avg headroom")
 ## Testing strategy
 
 ### Unit
-- ScheduleSpace emits exactly `{evaluate, constraints, variables, domains, successors}`.
+- ScheduleSpace emits exactly `{EVALUATE, SUCCESSORS}` once all three
+  decorators are attached (none earlier).
 - Each decorator raises on re-attachment.
 - `target(tolerance=…)` rejects `<0` and `>1`.
 - When `graph` is provided, `downstream` is auto-derived; when omitted,
@@ -286,25 +321,27 @@ print(f"Slack per slot: {result.slack.mean():.1f} kW avg headroom")
 - The neighborhood is k-bit flips (k=1 default), verified by enumerating
   successors of a tiny state.
 
-### Property (Hypothesis or hand-rolled)
-- For any returned schedule and any t:
-  `sum(demand(e, t) for e in entities if schedule[t, e]) ≤ capacity(t)`,
-  and (with tolerance>0) `≥ capacity(t) · (1 - tolerance)`.
-- Min-Conflicts iterations are monotone-improving in conflict count (with
-  high probability, allowing for the random-restart tail).
+### Property (hand-rolled)
+- For any state in the search trajectory, `ScheduleSpace._evaluate(s)` =
+  `-fairness(_to_array(s)) + λ·max(0, sum_e demand·on - cap)` summed per
+  slot. Verified by parameterising over random states.
 - Fairness output is invariant to entity reordering (the objective is
   symmetric in entities — `weighted_minmax` respects this).
+- 1-flip neighborhood enumerates exactly `T·N` successors of any state.
 
 ### Integration
-- **Tiny (exact).** 5 substations × 24 slots, integer demand/capacity.
-  Auto-solver picks Backtracking, finds the brute-force-verified optimum.
-- **Medium (anytime).** 20 substations × 168 slots (the worked example).
-  Auto-solver picks `AnytimeCSP[MinConflicts]`. Lands within a configured
-  optimality gap of a Min-Conflicts-only baseline run with a much larger
-  budget.
-- **Example as smoke test.** `examples/power_grid.py` runs in CI with a
-  fixed seed; the printed algorithm name and a coarse fairness threshold
-  are asserted, catching API drift without locking exact float values.
+- **Tiny.** 4 substations × 6 slots, integer demand/capacity. Run
+  `space.solver().solve()`; assert `result.found`, `result.algorithm ==
+  "AnytimeLocal"`, and that all per-slot capacity constraints are satisfied
+  in the returned ndarray (no `λ·violations` term left in `result.cost`).
+- **Medium (smoke).** 20 substations × 168 slots, fixed RNG seed
+  (`np.random.default_rng(42)`). Run with `space.solver(timeout=5).solve()`.
+  Assert `result.found`, capacity bound holds on every slot, and the
+  weighted-min-max fairness is at least `0.50` (a coarse threshold; locks
+  no exact float, catches gross regressions).
+- **Example as smoke test.** `examples/power_grid.py` runs in CI with the
+  same RNG seed; the printed algorithm name (`AnytimeLocal`) and the
+  feasibility check are asserted.
 
 ## Risks and open questions
 
@@ -314,24 +351,39 @@ print(f"Slack per slot: {result.slack.mean():.1f} kW avg headroom")
   the builder API from day one — not exercised by the v1 example, but
   available as a tuning knob. If the medium-integration test reveals
   poor convergence, escalate to k=2 in the default.
-- **Min-Conflicts performance on T·N variables.** Current pathos
-  Min-Conflicts iterates over a Python list of variables; on
-  T·N = 168·20 = 3 360 vars this should be fine, but if profiling shows
-  it dominates wall-clock, refactor to ndarray indexing during
-  implementation. Tracked as an implementation-phase decision, not a
-  spec-blocker.
+- **Penalty weight `λ` calibration.** The default `1e3` is a heuristic.
+  Wrong `λ` can let SA/Tabu accept infeasible schedules in exchange for
+  fairness gains. Mitigation: the integration test asserts feasibility
+  on the returned schedule; if it fails, bump `λ` and retry. Long-term
+  fix (v1.1): adaptive penalty or native `CONSTRAINTS` capability.
 - **Auto-derivation of `downstream` when `graph` is provided.** "Set of
   nodes reachable from entity once all other entities are cut" is
   well-defined for trees but ambiguous on meshed graphs (multiple
   feeders may serve the same leaf). v1 documents the tree-grid
   assumption; meshed-grid handling is deferred.
+- **Frozenset state copy cost.** Each successor allocates a fresh
+  frozenset. At T·N = 3 360 the per-state hash + copy is sub-millisecond
+  but every `_evaluate` call rebuilds the ndarray view. If profiling
+  shows this dominates wall-clock, add a small `lru_cache`-backed
+  ndarray cache keyed on `id(state)` (frozenset id is stable for
+  immutable values). Implementation-phase decision, not a spec-blocker.
 
-## Open question for v1.1 / future
+## Open questions for v1.1 / future
 
-- Built-in fairness helpers beyond `weighted_minmax` (Gini, variance, Jain's).
+- **Native CSP-family compatibility.** Either relax `_is_csp_shaped` in
+  `pathos/algorithms/csp.py:13` to accept ScheduleSpace's frozenset state
+  (or a new shape predicate `_is_schedule_shaped`), and adapt
+  `MinConflicts` to operate on `frozenset[(t,e)]` states. Would let
+  `AnytimeCSP[MinConflicts, Backtracking]` win selection for
+  ScheduleSpace AND surface `CONSTRAINTS` natively instead of folding
+  capacity into `_evaluate` as a penalty.
+- Built-in fairness helpers beyond `weighted_minmax` (Gini, variance,
+  Jain's).
 - Meshed-grid `downstream` semantics (max-flow based, or user-required).
-- Per-region capacity axes (multiple `@capacity` decorators with region tags).
+- Per-region capacity axes (multiple `@capacity` decorators with region
+  tags).
 - Sequential-decision mode for online operation against live demand.
+- Size-aware `score_for` overrides once we have ScheduleSpace benchmarks.
 
 ## Repository
 
