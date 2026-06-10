@@ -55,7 +55,15 @@ def main() -> int:
                         choices=("on", "off", "auto"),
                         help="run oracle row? auto = on for S/M, off for L (default)")
     parser.add_argument("--quick", action="store_true",
-                        help="trimmed run: M tier only, 3 seeds, oracle off")
+                        help="trimmed run: M tier only, 3 seeds, oracle off — "
+                             "headline + stress run at full M-tier budgets, "
+                             "expect ~60-120 min on a laptop")
+    parser.add_argument("--budget-scale", type=float, default=1.0,
+                        help="scale per-suite budgets (default 1.0). Smoke "
+                             "tests use 0.1 to crash-check the runner without "
+                             "waiting for algorithms to converge.")
+    parser.add_argument("--stress-multiplier", type=float, default=5.0,
+                        help="auto_stress = budget * this (default 5.0)")
     parser.add_argument("--json", type=str, default=None,
                         help="path for results JSON (default: results-<TS>.json)")
     parser.add_argument("--report", type=str, default=None,
@@ -97,10 +105,13 @@ def main() -> int:
             return False
         return tier in ("S", "M")
 
-    # Quick mode trims wall-clock so the smoke test fits in ~60s:
-    # budgets scaled to 1/10, stress only 2x headline.
-    budget_scale = 0.1 if args.quick else 1.0
-    stress_mult = 2.0 if args.quick else 5.0
+    # Budget knobs are now explicit (--budget-scale, --stress-multiplier).
+    # --quick controls run *shape* (M tier only, 3 seeds, oracle off)
+    # without touching budgets — at the previous implicit 0.1x scale the
+    # cascade had no chance on big problems and the report looked like
+    # an algorithm bug when it was actually budget starvation.
+    budget_scale = args.budget_scale
+    stress_mult = args.stress_multiplier
 
     rows = []
     for tier in tiers:

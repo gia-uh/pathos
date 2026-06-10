@@ -7,12 +7,18 @@ from pathlib import Path
 def test_quick_sweep_runs_end_to_end_without_no_cliff_failures(tmp_path):
     json_path = tmp_path / "results.json"
     report_path = tmp_path / "REPORT.md"
+    # The smoke test is a crash-check of the runner, not a real bench:
+    # tiny budget-scale + tight stress so it finishes in <60s on any
+    # CI runner. It validates the JSON+REPORT artifacts shape, NOT
+    # whether algorithms converge.
     result = subprocess.run(
         [
             sys.executable, "-m", "benchmarks.realistic",
             "--quick",
             "--suites", "C1,C2,C3,R3,R6",
             "--repeat", "1",
+            "--budget-scale", "0.1",
+            "--stress-multiplier", "2.0",
             "--json", str(json_path),
             "--report", str(report_path),
         ],
