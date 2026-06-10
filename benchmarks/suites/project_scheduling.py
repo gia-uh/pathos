@@ -70,19 +70,39 @@ def _express(inst: ProjectInstance):
     def capacity(slot):
         return 1.0  # serial execution
 
+    task_to_idx = {t: i for i, t in enumerate(inst.tasks)}
+    duration_by_idx = {task_to_idx[t]: d for t, d in inst.durations.items()}
+
     @space.fairness
     def fairness(schedule):
-        # 1.0 minus normalized precedence violations (higher = better).
-        # Schedule is (T, N) bool matrix per the ScheduleSpace contract.
+        # fairness = coverage * precedence_score
+        #   coverage = mean over tasks of min(on_count / duration, 1)
+        #   precedence_score = 1 - viol / max(1, total_edges)
+        # Multiplicative so an empty schedule (perfect precedence, zero
+        # coverage) gets fairness=0, not fairness=1. This blocks the
+        # degenerate "do nothing" optimum the cascade was finding under
+        # the previous additive formulation.
         T = len(schedule)
         N = len(schedule[0]) if T else 0
+
+        # Coverage: how completely is each task scheduled?
+        if N == 0:
+            return 0.0
+        cover_sum = 0.0
+        for n in range(N):
+            on_count = sum(1 for t in range(T) if schedule[t][n])
+            dur = duration_by_idx.get(n, 1)
+            cover_sum += min(on_count / dur, 1.0)
+        coverage = cover_sum / N
+
+        # Precedence: penalise violations only across edges where the
+        # successor has started.
         first_on: dict[int, int | None] = {}
         for n in range(N):
             first_on[n] = next(
                 (t for t in range(T) if schedule[t][n]), None,
             )
         viol = 0
-        task_to_idx = {t: i for i, t in enumerate(inst.tasks)}
         for succ, preds in preds_by_succ.items():
             si = task_to_idx[succ]
             s_first = first_on[si]
@@ -93,9 +113,9 @@ def _express(inst: ProjectInstance):
                 p_first = first_on[pi]
                 if p_first is None or p_first >= s_first:
                     viol += 1
-        if not preds_by_succ:
-            return 1.0
-        return max(0.0, 1.0 - viol / max(1, len(inst.precedence)))
+        precedence_score = max(0.0, 1.0 - viol / max(1, len(inst.precedence)))
+
+        return coverage * precedence_score
 
     return space
 
