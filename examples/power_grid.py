@@ -60,7 +60,11 @@ def run():
     def fairness(schedule):
         return _fair(schedule)
 
-    return space.solver(timeout=5).solve()
+    # 30s is generous for the 20x168 instance — the example's purpose is
+    # API-drift smoke, not a perf benchmark, so give slow CI runners
+    # comfortable headroom for the AnytimeLocal cascade to land on an
+    # incumbent.
+    return space.solver(timeout=30).solve()
 
 
 if __name__ == "__main__":
