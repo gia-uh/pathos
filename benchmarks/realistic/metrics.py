@@ -61,11 +61,12 @@ def tunability_gain(rows: Iterable[RunRow]) -> tuple[float, str | None]:
 
 def is_no_cliff_failure(row: RunRow, tolerance: float) -> bool:
     """A single auto-headline / auto-stress run that constitutes a
-    no-cliff bug: crash, not_found, or infeasible beyond tolerance.
+    no-cliff bug: crash or not_found / infeasible beyond tolerance.
 
     `nodes_expanded = -2` is the bench's existing crash sentinel
-    (inherited from bench.py's run_one). Cost being None on a feasible
-    flag should not happen, but treat it as failure too.
+    (inherited from bench.py's run_one). `feasible=True, cost=None`
+    is a legitimate success on feasibility-only spaces (CSP without
+    `@evaluate`) and is NOT a failure.
     """
     if not row.mode.startswith("auto_"):
         return False
@@ -74,7 +75,5 @@ def is_no_cliff_failure(row: RunRow, tolerance: float) -> bool:
     if row.nodes_expanded == -2:
         return True  # crash sentinel
     if not row.feasible:
-        return True
-    if row.cost is None:
         return True
     return False

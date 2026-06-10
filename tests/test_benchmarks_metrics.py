@@ -100,6 +100,14 @@ def test_no_cliff_failure_passes_feasible_run():
     assert is_no_cliff_failure(row, tolerance=0.0) is False
 
 
+def test_no_cliff_failure_accepts_csp_feasible_with_no_cost():
+    """CSP / feasibility-only problems (N-Queens, timetabling) report
+    feasible=True but cost=None because there is no objective. That is
+    a legitimate success, not a no-cliff failure."""
+    row = _row("auto_headline", "AnytimeCSP", cost=None, feasible=True)
+    assert is_no_cliff_failure(row, tolerance=0.0) is False
+
+
 def test_tsp_one_tree_lb_is_a_lower_bound_on_tour_cost():
     # Triangle: 3 nodes, distances 1-1-1 -> LB <= 3 (optimal tour = 3).
     distances = {(0, 1): 1.0, (1, 0): 1.0,
