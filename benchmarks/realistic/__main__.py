@@ -60,7 +60,21 @@ def main() -> int:
                         help="path for results JSON (default: results-<TS>.json)")
     parser.add_argument("--report", type=str, default=None,
                         help="path for REPORT.md (default: REPORT-<TS>.md)")
+    parser.add_argument("--diff", nargs=2, metavar=("REPORT_A", "REPORT_B"),
+                        default=None,
+                        help="diff two REPORT.md files instead of running")
     args = parser.parse_args()
+
+    if args.diff:
+        from benchmarks.realistic.diff import diff_reports
+        a = Path(args.diff[0]).read_text()
+        b = Path(args.diff[1]).read_text()
+        delta = diff_reports(a, b)
+        print(f"{'suite':<6} {'size':>6} {'status':<10} {'Δcost %':>10}")
+        for d in delta:
+            cd = "n/a" if d["cost_delta_pct"] is None else f"{d['cost_delta_pct']:+.2f}"
+            print(f"{d['suite']:<6} {d['size']:>6} {d['status']:<10} {cd:>10}")
+        return 0
 
     if args.quick:
         args.tiers = "M"
